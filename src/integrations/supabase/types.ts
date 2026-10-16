@@ -14,6 +14,108 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_settings: {
+        Row: {
+          admin_note: string
+          chat_enabled: boolean
+          daily_limit: number
+          hourly_limit: number
+          id: number
+          image_daily_limit: number
+          image_gen: boolean
+          site_builder: boolean
+          updated_at: string
+          url_reader: boolean
+          web_search: boolean
+        }
+        Insert: {
+          admin_note?: string
+          chat_enabled?: boolean
+          daily_limit?: number
+          hourly_limit?: number
+          id: number
+          image_daily_limit?: number
+          image_gen?: boolean
+          site_builder?: boolean
+          updated_at?: string
+          url_reader?: boolean
+          web_search?: boolean
+        }
+        Update: {
+          admin_note?: string
+          chat_enabled?: boolean
+          daily_limit?: number
+          hourly_limit?: number
+          id?: number
+          image_daily_limit?: number
+          image_gen?: boolean
+          site_builder?: boolean
+          updated_at?: string
+          url_reader?: boolean
+          web_search?: boolean
+        }
+        Relationships: []
+      }
+      chat_usage: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          ok: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          ok?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          ok?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
+      fatwa_records: {
+        Row: {
+          created_at: string
+          id: string
+          keywords: string
+          original_text: string
+          reference: string
+          ruling: string
+          source: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          keywords?: string
+          original_text?: string
+          reference?: string
+          ruling: string
+          source?: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          keywords?: string
+          original_text?: string
+          reference?: string
+          ruling?: string
+          source?: string
+          title?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           created_at: string
@@ -52,6 +154,39 @@ export type Database = {
           },
         ]
       }
+      pages: {
+        Row: {
+          created_at: string
+          html: string
+          id: string
+          num: number
+          slug: string | null
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          html: string
+          id?: string
+          num?: never
+          slug?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          html?: string
+          id?: string
+          num?: never
+          slug?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       threads: {
         Row: {
           created_at: string
@@ -76,15 +211,60 @@ export type Database = {
         }
         Relationships: []
       }
+      user_memories: {
+        Row: {
+          created_at: string
+          id: string
+          text: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          text: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -211,6 +391,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
