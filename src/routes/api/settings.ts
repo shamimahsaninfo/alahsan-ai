@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+// Safe, user-visible settings only (no prompts, no keys).
 export const Route = createFileRoute("/api/settings")({
   server: {
     handlers: {
