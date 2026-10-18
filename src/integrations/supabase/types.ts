@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_keys: {
+        Row: {
+          google_key: string
+          id: number
+          key_pool: Json
+          openai_key: string
+          updated_at: string
+        }
+        Insert: {
+          google_key?: string
+          id: number
+          key_pool?: Json
+          openai_key?: string
+          updated_at?: string
+        }
+        Update: {
+          google_key?: string
+          id?: number
+          key_pool?: Json
+          openai_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ai_settings: {
         Row: {
           admin_note: string
@@ -23,10 +47,17 @@ export type Database = {
           id: number
           image_daily_limit: number
           image_gen: boolean
+          model: string
+          provider: string
+          reasoning_effort: string
           site_builder: boolean
+          suggestions: string
+          system_prompt: string
           updated_at: string
           url_reader: boolean
           web_search: boolean
+          welcome_subtitle: string
+          welcome_title: string
         }
         Insert: {
           admin_note?: string
@@ -36,10 +67,17 @@ export type Database = {
           id: number
           image_daily_limit?: number
           image_gen?: boolean
+          model?: string
+          provider?: string
+          reasoning_effort?: string
           site_builder?: boolean
+          suggestions?: string
+          system_prompt?: string
           updated_at?: string
           url_reader?: boolean
           web_search?: boolean
+          welcome_subtitle?: string
+          welcome_title?: string
         }
         Update: {
           admin_note?: string
@@ -49,10 +87,17 @@ export type Database = {
           id?: number
           image_daily_limit?: number
           image_gen?: boolean
+          model?: string
+          provider?: string
+          reasoning_effort?: string
           site_builder?: boolean
+          suggestions?: string
+          system_prompt?: string
           updated_at?: string
           url_reader?: boolean
           web_search?: boolean
+          welcome_subtitle?: string
+          welcome_title?: string
         }
         Relationships: []
       }
@@ -79,6 +124,36 @@ export type Database = {
           id?: string
           kind?: string
           ok?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
+      conversations: {
+        Row: {
+          archived: boolean
+          created_at: string
+          id: string
+          pinned: boolean
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          title?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -116,35 +191,66 @@ export type Database = {
         }
         Relationships: []
       }
-      messages: {
+      health_checks: {
         Row: {
           created_at: string
-          id: string
-          parts: Json
-          role: string
-          thread_id: string
-          ui_id: string
-          user_id: string
+          id: number
+          results: Json
         }
         Insert: {
           created_at?: string
-          id?: string
-          parts: Json
-          role: string
-          thread_id: string
-          ui_id: string
-          user_id: string
+          id?: never
+          results: Json
         }
         Update: {
           created_at?: string
+          id?: never
+          results?: Json
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string | null
+          created_at: string
+          id: string
+          parts: Json | null
+          role: string
+          thread_id: string | null
+          ui_id: string | null
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          conversation_id?: string | null
+          created_at?: string
           id?: string
-          parts?: Json
+          parts?: Json | null
+          role: string
+          thread_id?: string | null
+          ui_id?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          parts?: Json | null
           role?: string
-          thread_id?: string
-          ui_id?: string
+          thread_id?: string | null
+          ui_id?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_thread_id_fkey"
             columns: ["thread_id"]
@@ -215,18 +321,21 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          kind: string
           text: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          kind?: string
           text: string
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          kind?: string
           text?: string
           user_id?: string
         }
@@ -255,6 +364,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_founder_admin: { Args: never; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
