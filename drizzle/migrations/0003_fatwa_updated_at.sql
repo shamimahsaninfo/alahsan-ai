@@ -1,0 +1,1 @@
+ALTER TABLE public.fatwa_records ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
