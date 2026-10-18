@@ -65,7 +65,7 @@ export function ChatWindow({
       return;
     }
     const w = window as unknown as Record<string, unknown>;
-    const SR = (w.SpeechRecognition || w.webkitSpeechRecognition) as
+    const SR = (w["SpeechRecognition"] || w["webkitSpeechRecognition"]) as
       | (new () => {
           lang: string;
           interimResults: boolean;
@@ -84,7 +84,7 @@ export function ChatWindow({
     rec.lang = "bn-BD";
     rec.interimResults = false;
     rec.onresult = (e) => {
-      const t = Array.from(e.results).map((r) => r[0].transcript).join(" ");
+      const t = Array.from(e.results).map((r) => r[0]?.transcript ?? "").join(" ");
       setInput((prev) => (prev ? prev + " " : "") + t);
     };
     rec.onerror = (e) => {

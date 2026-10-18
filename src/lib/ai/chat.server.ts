@@ -61,7 +61,7 @@ async function quickWebSearch(query: string): Promise<string> {
     const xml = await res.text();
     const titles = Array.from(xml.matchAll(/<title>(.*?)<\/title>/g))
       .slice(1, 4)
-      .map((m) => "- " + m[1].replace(/<!\[CDATA\[|\]\]>/g, "").trim());
+      .map((m) => "- " + (m[1] ?? "").replace(/<!\[CDATA\[|\]\]>/g, "").trim());
     return titles.length ? `সংগৃহীত লাইভ তথ্য:\n${titles.join("\n")}` : "";
   } catch {
     return "";
@@ -104,10 +104,9 @@ export async function handleChat(request: Request) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   // অ্যাডমিন সেটিংস ও রেট লিমিট যাচাই
-  const [{ data: settings }, { data: keys }, { data: isAdmin }] = await Promise.all([
+  const [{ data: settings }, { data: isAdmin }] = await Promise.all([
     supabaseAdmin.from("ai_settings").select("*").eq("id", 1).maybeSingle(),
-    supabaseAdmin.from("ai_keys").select("*").eq("id", 1).maybeSingle(),
-    supabaseAdmin.rpc("has_role", { _user_id: userId, _role: "admin" }).catch(() => ({ data: false })),
+    supabaseAdmin.rpc("has_role", { _user_id: userId, _role: "admin" }),
   ]);
 
   if (settings && settings.chat_enabled === false && !isAdmin) {
@@ -206,10 +205,10 @@ export async function handleChat(request: Request) {
   const history = messages.slice(-MAX_HISTORY);
   const coreMessages = await convertToModelMessages(history);
 
-  const runId = getLovableAiGatewayRunId(request);
+  const runId = createLovableAiGatewayRunIdFetch(getLovableAiGatewayRunId(request));
   const lovableApiKey = process.env["LOVABLE_API_KEY"];
-  const googleApiKey = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
-  const openaiApiKey = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
+  const googleApiKey = process.env["GOOGLE_API_KEY"];
+  const openaiApiKey = process.env["OPENAI_API_KEY"];
 
   let openaiClient;
   let activeModel = "openai/gpt-6-astra";
@@ -230,7 +229,7 @@ export async function handleChat(request: Request) {
     openaiClient = createOpenAI({
       apiKey: lovableApiKey,
       baseURL: "https://ai.gateway.lovable.dev/v1",
-      fetch: createLovableAiGatewayRunIdFetch(runId),
+      fetch: runId.fetch,
     });
     activeModel = "openai/gpt-6-astra";
   } else {
@@ -243,6 +242,6 @@ export async function handleChat(request: Request) {
     messages: coreMessages,
   });
 
-  const response = result.toUIMessageResponse();
+  const response = result.toUIMessageStreamResponse();
   return withLovableAiGatewayRunIdHeader(response, runId);
 }
