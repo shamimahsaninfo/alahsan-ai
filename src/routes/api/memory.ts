@@ -30,7 +30,7 @@ export const Route = createFileRoute("/api/memory")({
         if (d.action === "delete") {
           await supabaseAdmin.from("user_memories").delete().eq("user_id", uid).eq("id", d.id);
         } else if (d.action === "add") {
-          await supabaseAdmin.from("user_memories").insert({ user_id: uid, text: d.text.trim(), kind: "preference" });
+          await supabaseAdmin.from("user_memories").insert({ user_id: uid, text: d.text.trim() });
         }
 
         const { data: list } = await supabaseAdmin.from("user_memories").select("id,text").eq("user_id", uid).order("created_at", { ascending: false });

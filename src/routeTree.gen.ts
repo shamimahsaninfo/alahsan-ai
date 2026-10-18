@@ -10,15 +10,27 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SlugRouteImport } from './routes/$slug'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedSalatRouteImport } from './routes/_authenticated/salat'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiMemoryRouteImport } from './routes/api/memory'
+import { Route as ApiPagesRouteImport } from './routes/api/pages'
+import { Route as ApiSettingsRouteImport } from './routes/api/settings'
+import { Route as ImgSplatRouteImport } from './routes/img.$'
+import { Route as PIdRouteImport } from './routes/p/$id'
 import { Route as AuthenticatedChatIndexRouteImport } from './routes/_authenticated/chat.index'
 import { Route as AuthenticatedChatThreadIdRouteImport } from './routes/_authenticated/chat.$threadId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlugRoute = SlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -30,9 +42,39 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSalatRoute = AuthenticatedSalatRouteImport.update({
+  id: '/salat',
+  path: '/salat',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMemoryRoute = ApiMemoryRouteImport.update({
+  id: '/api/memory',
+  path: '/api/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPagesRoute = ApiPagesRouteImport.update({
+  id: '/api/pages',
+  path: '/api/pages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSettingsRoute = ApiSettingsRouteImport.update({
+  id: '/api/settings',
+  path: '/api/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImgSplatRoute = ImgSplatRouteImport.update({
+  id: '/img/$',
+  path: '/img/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PIdRoute = PIdRouteImport.update({
+  id: '/p/$id',
+  path: '/p/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedChatIndexRoute = AuthenticatedChatIndexRouteImport.update({
@@ -49,15 +91,29 @@ const AuthenticatedChatThreadIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$slug': typeof SlugRoute
   '/auth': typeof AuthRoute
+  '/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/memory': typeof ApiMemoryRoute
+  '/api/pages': typeof ApiPagesRoute
+  '/api/settings': typeof ApiSettingsRoute
+  '/img/$': typeof ImgSplatRoute
+  '/p/$id': typeof PIdRoute
   '/chat/$threadId': typeof AuthenticatedChatThreadIdRoute
   '/chat/': typeof AuthenticatedChatIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$slug': typeof SlugRoute
   '/auth': typeof AuthRoute
+  '/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/memory': typeof ApiMemoryRoute
+  '/api/pages': typeof ApiPagesRoute
+  '/api/settings': typeof ApiSettingsRoute
+  '/img/$': typeof ImgSplatRoute
+  '/p/$id': typeof PIdRoute
   '/chat/$threadId': typeof AuthenticatedChatThreadIdRoute
   '/chat': typeof AuthenticatedChatIndexRoute
 }
@@ -65,22 +121,60 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/$slug': typeof SlugRoute
   '/auth': typeof AuthRoute
+  '/_authenticated/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/memory': typeof ApiMemoryRoute
+  '/api/pages': typeof ApiPagesRoute
+  '/api/settings': typeof ApiSettingsRoute
+  '/img/$': typeof ImgSplatRoute
+  '/p/$id': typeof PIdRoute
   '/_authenticated/chat/$threadId': typeof AuthenticatedChatThreadIdRoute
   '/_authenticated/chat/': typeof AuthenticatedChatIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/api/chat' | '/chat/$threadId' | '/chat/'
+  fullPaths:
+    | '/'
+    | '/$slug'
+    | '/auth'
+    | '/salat'
+    | '/api/chat'
+    | '/api/memory'
+    | '/api/pages'
+    | '/api/settings'
+    | '/img/$'
+    | '/p/$id'
+    | '/chat/$threadId'
+    | '/chat/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/api/chat' | '/chat/$threadId' | '/chat'
+  to:
+    | '/'
+    | '/$slug'
+    | '/auth'
+    | '/salat'
+    | '/api/chat'
+    | '/api/memory'
+    | '/api/pages'
+    | '/api/settings'
+    | '/img/$'
+    | '/p/$id'
+    | '/chat/$threadId'
+    | '/chat'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/$slug'
     | '/auth'
+    | '/_authenticated/salat'
     | '/api/chat'
+    | '/api/memory'
+    | '/api/pages'
+    | '/api/settings'
+    | '/img/$'
+    | '/p/$id'
     | '/_authenticated/chat/$threadId'
     | '/_authenticated/chat/'
   fileRoutesById: FileRoutesById
@@ -88,8 +182,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  SlugRoute: typeof SlugRoute
   AuthRoute: typeof AuthRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiMemoryRoute: typeof ApiMemoryRoute
+  ApiPagesRoute: typeof ApiPagesRoute
+  ApiSettingsRoute: typeof ApiSettingsRoute
+  ImgSplatRoute: typeof ImgSplatRoute
+  PIdRoute: typeof PIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +199,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$slug': {
+      id: '/$slug'
+      path: '/$slug'
+      fullPath: '/$slug'
+      preLoaderRoute: typeof SlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -115,11 +222,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/salat': {
+      id: '/_authenticated/salat'
+      path: '/salat'
+      fullPath: '/salat'
+      preLoaderRoute: typeof AuthenticatedSalatRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
       fullPath: '/api/chat'
       preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/memory': {
+      id: '/api/memory'
+      path: '/api/memory'
+      fullPath: '/api/memory'
+      preLoaderRoute: typeof ApiMemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/pages': {
+      id: '/api/pages'
+      path: '/api/pages'
+      fullPath: '/api/pages'
+      preLoaderRoute: typeof ApiPagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/settings': {
+      id: '/api/settings'
+      path: '/api/settings'
+      fullPath: '/api/settings'
+      preLoaderRoute: typeof ApiSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/img/$': {
+      id: '/img/$'
+      path: '/img/$'
+      fullPath: '/img/$'
+      preLoaderRoute: typeof ImgSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p/$id': {
+      id: '/p/$id'
+      path: '/p/$id'
+      fullPath: '/p/$id'
+      preLoaderRoute: typeof PIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/chat/': {
@@ -140,11 +289,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedSalatRoute: typeof AuthenticatedSalatRoute
   AuthenticatedChatThreadIdRoute: typeof AuthenticatedChatThreadIdRoute
   AuthenticatedChatIndexRoute: typeof AuthenticatedChatIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedSalatRoute: AuthenticatedSalatRoute,
   AuthenticatedChatThreadIdRoute: AuthenticatedChatThreadIdRoute,
   AuthenticatedChatIndexRoute: AuthenticatedChatIndexRoute,
 }
@@ -155,8 +306,14 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  SlugRoute: SlugRoute,
   AuthRoute: AuthRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiMemoryRoute: ApiMemoryRoute,
+  ApiPagesRoute: ApiPagesRoute,
+  ApiSettingsRoute: ApiSettingsRoute,
+  ImgSplatRoute: ImgSplatRoute,
+  PIdRoute: PIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

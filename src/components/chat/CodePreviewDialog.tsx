@@ -30,8 +30,3 @@ export function CodePreviewDialog({
                                                                                                                                                                   </Dialog>
       );
 }
-
-      )
-}
-}
-})
