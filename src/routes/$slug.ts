@@ -32,11 +32,3 @@ export const Route = createFileRoute("/$slug")({
               },
       },
 });
-
-                                                                                                                                    }
-                                                                                                                      })
-                                              })
-                        }
-              }
-      }
-})
