@@ -78,6 +78,7 @@ function SalatPage() {
       if (c?.pos) { setPos(c.pos); setTimes(c.times); setStatus("সংরক্ষিত সময়সূচি দেখানো হচ্ছে (অফলাইনেও কাজ করবে)।"); return; }
     } catch { /* ignore */ }
     loadFor(DHAKA, "ডিফল্ট হিসেবে ঢাকা, বাংলাদেশের সময় দেখানো হচ্ছে। নিজের এলাকার জন্য উপরের বোতাম চাপুন।");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const locate = () => {

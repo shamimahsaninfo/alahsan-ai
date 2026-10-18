@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 const Body = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("extract"), user: z.string().max(4000), assistant: z.string().max(4000) }),
   z.object({ action: z.literal("list") }),
   z.object({ action: z.literal("delete"), id: z.string().uuid() }),
   z.object({ action: z.literal("add"), text: z.string().min(3).max(300) }),
@@ -17,24 +18,27 @@ export const Route = createFileRoute("/api/memory")({
         const pub = createClient(process.env["SUPABASE_URL"]!, process.env["SUPABASE_PUBLISHABLE_KEY"]!, {
           auth: { persistSession: false, autoRefreshToken: false },
         });
-        const { data: u } = await pub.auth.getUser(token);
-        if (!u.user) return new Response("Unauthorized", { status: 401 });
-
+        const { data: u, error: ue } = await pub.auth.getUser(token);
+        if (ue || !u.user) return new Response("Unauthorized", { status: 401 });
         const parsed = Body.safeParse(await request.json().catch(() => null));
-        if (!parsed.success) return new Response("Invalid request", { status: 400 });
+        if (!parsed.success) return new Response("ভুল অনুরোধ", { status: 400 });
 
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const m = await import("@/lib/memory.server");
         const uid = u.user.id;
-        const d = parsed.data;
-
-        if (d.action === "delete") {
-          await supabaseAdmin.from("user_memories").delete().eq("user_id", uid).eq("id", d.id);
-        } else if (d.action === "add") {
-          await supabaseAdmin.from("user_memories").insert({ user_id: uid, text: d.text.trim() });
+        try {
+          const d = parsed.data;
+          if (d.action === "delete") await m.deleteMemory(uid, d.id);
+          if (d.action === "add") await m.addMemory(uid, [{ text: d.text.trim(), kind: "preference" }]);
+          if (d.action === "extract") {
+            const items = await m.loadMemory(uid, 200);
+            const facts = await m.gatekeep(d.user, d.assistant, items);
+            await m.addMemory(uid, facts);
+            return Response.json({ added: facts.length });
+          }
+          return Response.json({ items: await m.loadMemory(uid, 200) });
+        } catch (e: any) {
+          return new Response(e?.message || "স্মৃতি ত্রুটি", { status: 502 });
         }
-
-        const { data: list } = await supabaseAdmin.from("user_memories").select("id,text").eq("user_id", uid).order("created_at", { ascending: false });
-        return Response.json({ items: list ?? [] });
       },
     },
   },

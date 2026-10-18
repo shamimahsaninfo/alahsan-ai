@@ -20,7 +20,7 @@ export async function extractDocText(file: File): Promise<string> {
     for (let p = 1; p <= max; p++) {
       const page = await doc.getPage(p);
       const tc = await page.getTextContent();
-      out.push(`--- পৃষ্ঠা ${p} ---\n` + tc.items.map((it: object) => ("str" in it ? it.str : "")).join(" "));
+      out.push(`--- পৃষ্ঠা ${p} ---\n` + tc.items.map((it) => ("str" in it ? it.str : "")).join(" "));
     }
     return out.join("\n\n");
   }
