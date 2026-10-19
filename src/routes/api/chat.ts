@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { DEFAULT_MODELS, LOVABLE_MODELS, type Provider } from "@/lib/models";
 import { serviceError } from "@/lib/service-errors";
-import { clockContext, evidencePolicy, parseNewsRss, requiresLiveSearch } from "@/lib/chat-grounding";
+import { clockContext, directSessionFact, evidencePolicy, parseNewsRss, requiresLiveSearch } from "@/lib/chat-grounding";
 
 const Body = z.object({
   messages: z
@@ -239,6 +239,10 @@ async function handleChat(request: Request): Promise<Response> {
           model = model.includes("/") ? model : provider === "google" ? `google/${model}` : DEFAULT_MODELS.lovable;
         }
         if (!key) return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান।", { status: 503 });
+
+        // Real clock and selected-model metadata need no paid generation or guesswork.
+        const fact = directSessionFact(lastText, model);
+        if (fact) return stageStream([], async () => fact);
 
         // Merge Prompts properly so BASE_PROMPT is NEVER lost
         let system = PERSONA + "\n\n" + BASE_PROMPT;
