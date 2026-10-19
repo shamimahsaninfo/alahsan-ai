@@ -350,10 +350,13 @@ async function handleChat(request: Request): Promise<Response> {
         
         const textMsgs = parsed.data.messages.map((m) => ({ role: m.role, content: m.content }));
         // Independent search and memory preparation run concurrently; preserve search coverage and timeout.
-        const searchText = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
-        const searchP = needsSearch(searchText) ? Promise.race([
-          webSearch(searchText).catch(() => ""),
-          new Promise<string>((resolve) => setTimeout(() => resolve(""), 6000)),
+                const lastRaw = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
+        // মোডের দীর্ঘ নির্দেশ বাদ দিয়ে শুধু ব্যবহারকারীর আসল প্রশ্ন থেকে সার্চ শনাক্তকরণ
+        const userCleanText = lastRaw.replace(/^\[নির্দেশ:[\s\S]*?\]\s*/i, "").replace(/=== সংযুক্ত ফাইল:[\s\S]*$/g, "").trim();
+        // সার্চ টাইমআউট ২ সেকেন্ড (২০০০ms), যাতে উত্তর আসতে কোনোভাবেই ২-৩ সেকেন্ডের বেশি দেরি না হয়
+        const searchP = needsSearch(userCleanText) ? Promise.race([
+          webSearch(userCleanText).catch(() => ""),
+          new Promise<string>((resolve) => setTimeout(() => resolve(""), 2000)),
         ]) : null;
         if (s?.url_reader !== false) {
           const last = textMsgs[textMsgs.length - 1];
