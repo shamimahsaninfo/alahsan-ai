@@ -1,10 +1,10 @@
 export function isClockQuestion(text: string): boolean {
   if (/খবর|সংবাদ|news|আবহাওয়া|weather|স্কোর|score|দাম|price/i.test(text)) return false;
-  return /ক[য়য়]টা বাজে|কতটা বাজে|সময় কত|সময় কত|কত তারিখ|আজ.*(?:তারিখ|বার)|কি বার|কী বার|what time is it|current time|today.?s date|what day is it/i.test(text);
+  return /কয়টা বাজে|কয়টা বাজে|কতটা বাজে|সময় কত|সময় কত|কত তারিখ|আজ.*(?:তারিখ|বার)|কি বার|কী বার|what time is it|current time|today.?s date|what day is it/i.test(text);
 }
 
 export function directSessionFact(text: string, model: string, now = new Date()): string | null {
-  if (/^(?:এখন\s*)?(?:বাংলাদেশে?\s*)?(?:ক[য়য়]টা বাজে|কতটা বাজে|সময় কত|সময় কত)\s*[?।]*$/i.test(text.trim()) || /^(?:what time is it|current time)\s*[?!.]*$/i.test(text.trim())) {
+  if (/^(?:এখন\s*)?(?:বাংলাদেশে?\s*)?(?:কয়টা বাজে|কয়টা বাজে|কতটা বাজে|সময় কত|সময় কত)\s*[?।]*$/i.test(text.trim()) || /^(?:what time is it|current time)\s*[?!.]*$/i.test(text.trim())) {
     return clockContext(now).split("।")[0] + "।";
   }
   if (/^(?:তোমার|আপনার|তুমি|আপনি).{0,30}(?:AI\s*)?মডেল.{0,25}(?:কোন|কি|কী)|^what (?:AI )?model (?:are you|do you use)/i.test(text.trim())) {
