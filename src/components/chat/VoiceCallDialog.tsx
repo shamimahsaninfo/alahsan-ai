@@ -14,11 +14,12 @@ export function VoiceCallDialog({ onClose, messages = [] }: { onClose: () => voi
     if (typeof delta === "string" && (event.type === "session.output_transcript.delta" || event.type === "session.input_transcript.delta")) {
       const role = event.type === "session.input_transcript.delta" ? "user" : "assistant";
       setThinking(role === "user");
-      setTurns(previous => {
+      setTurns((previous): VoiceContextMessage[] => {
         const last = previous.at(-1);
-        return (last?.role === role
+        const next: VoiceContextMessage[] = last?.role === role
           ? [...previous.slice(0, -1), { role, content: (last.content + delta).slice(-4000) }]
-          : [...previous, { role, content: delta }]).slice(-20);
+          : [...previous, { role, content: delta }];
+        return next.slice(-20);
       });
     }
     if (event.type === "app.turn.complete") setThinking(false);
