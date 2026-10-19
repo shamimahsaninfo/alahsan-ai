@@ -409,24 +409,17 @@ async function handleChat(request: Request): Promise<Response> {
           });
         }
 
-        // Smart live web search — only when needed
-    const userCleanText = lastUser
-      .replace(/^\[নির্দেশ:[\s\S]*?\]\s*/i, "")
-      .replace(/=== সংযুক্ত ফাইল:[\s\S]*$/g, "")
-      .trim();
-
-    if (needsSearch(userCleanText)) {
-      stages.push("search");
-      const found = await searchP;
-
-      if (found) {
-        stages.push("verify");
-        system += `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: দ্রুত ও নির্ভুল উত্তর দাও। প্রাসঙ্গিক উৎসের লিংক উল্লেখ করো। তথ্য অপর্যাপ্ত হলে তা স্পষ্ট করো; অনুমান করে তথ্য বানিয়ো না।`;
-      } else {
-        system += `\n\nওয়েব অনুসন্ধানে ফল পাওয়া যায়নি। অনলাইনে যাচাই হয়েছে বলে দাবি কোরো না; সাম্প্রতিক তথ্য সম্পর্কে অনিশ্চয়তা জানাও।`;
-      }
-    }
-        
+               // Live web search for online/current questions
+        const userCleanText = lastUser.replace(/^\[নির্দেশ:[\s\S]*?\]\s*/i, "").replace(/=== সংযুক্ত ফাইল:[\s\S]*$/g, "").trim();
+        if (needsSearch(userCleanText)) {
+          stages.push("search");
+          const found = await searchP;
+          if (found) {
+            stages.push("verify");
+            system += `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: এই ফলাফল ও তোমার নিজস্ব জ্ঞানভাণ্ডারের সমন্বয়ে উত্তর দাও।`;
+          }
+        }
+       
         if (/ওয়েবসাইট|website|ওয়েব সাইট|অ্যাপ|app|landing|পেজ বানা|html/i.test(lastUser)) stages.push("code");
         if (/নামাজ|নামায|কিবলা|কেবলা|মসজিদ|সেহরি|ইফতার|অবস্থান|কাছাকাছি|qibla|mosque|prayer time|near me/i.test(lastUser)) {
           stages.unshift("geo");
