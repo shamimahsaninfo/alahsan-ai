@@ -397,6 +397,7 @@ function ChatPage() {
   }, [msgs]);
 
   const openConv = async (id: string) => {
+    setCallOpen(false);
     setActive(id);
     setSidebar(false);
     const { data } = await supabase.from("messages").select("role,content").eq("conversation_id", id).order("created_at");
@@ -404,6 +405,7 @@ function ChatPage() {
   };
 
   const newChat = () => {
+    setCallOpen(false);
     setActive(null);
     setMsgs([]);
     setSidebar(false);
@@ -738,7 +740,6 @@ function ChatPage() {
 
       {sidebar && <div className="fixed inset-0 z-20 bg-background/70 md:hidden" onClick={() => setSidebar(false)} />}
       <main className="bg-background flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        {callOpen && <VoiceCallDialog onClose={() => setCallOpen(false)} />}
         <header className="flex min-w-0 items-center justify-between gap-2 bg-background px-3 py-3 sm:px-4">
           <button className="md:hidden" onClick={() => setSidebar(!sidebar)} aria-label="মেনু"><Menu /></button>
           <span className="min-w-0 flex-1 truncate font-display text-lg text-primary">আল আহসান এআই</span>
@@ -849,6 +850,7 @@ function ChatPage() {
             <div ref={endRef} />
           </div>
         </div>
+        {callOpen && <VoiceCallDialog messages={msgs.filter(message => !message.error)} onClose={() => setCallOpen(false)} />}
         <div className="shrink-0 border-t border-border/60 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-4">
           {/* সংযুক্ত ছবি ও ফাইলের প্রিভিউ */}
           {(doc || docBusy || images.length > 0) && (
@@ -916,13 +918,14 @@ function ChatPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
               rows={1}
+              disabled={callOpen}
               placeholder={listening ? "শুনছি…" : "আপনার প্রশ্ন লিখুন…"}
               className="max-h-48 min-w-0 flex-1 resize-none bg-transparent px-2 py-3 outline-none placeholder:text-muted-foreground"
             />
             {loading ? (
               <button onClick={() => abortRef.current?.abort()} className="shrink-0 rounded-xl bg-secondary p-2 sm:p-3" aria-label="থামান"><Square size={20} /></button>
             ) : (
-              <button onClick={() => send()} disabled={(!input.trim() && !images.length && !doc) || docBusy} className="shrink-0 rounded-xl bg-primary p-2 sm:p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
+              <button onClick={() => send()} disabled={callOpen || (!input.trim() && !images.length && !doc) || docBusy} className="shrink-0 rounded-xl bg-primary p-2 sm:p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
             )}
           </div>
         </div>   
