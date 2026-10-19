@@ -316,6 +316,7 @@ async function handleChat(request: Request): Promise<Response> {
         if (needsSearch(lastUser)) {
           stages.push("search");
           const found = await searchP;
+          if (!found) return stageStream(["search"], async () => "অনলাইন অনুসন্ধানে আপনার প্রশ্নের সাম্প্রতিক তথ্য যাচাই করার মতো ফল পাওয়া যায়নি। তাই আজকের খবর, দাম বা ফলাফল অনুমান করে বলছি না। নির্দিষ্ট প্রতিবেদনের লিংক দিলে সেটি পড়ার চেষ্টা করতে পারি।");
           if (found) stages.push("verify");
           system += found
             ? `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: শুধু এই ফলাফলের ভিত্তিতে উত্তর দেবে, উত্তরের শেষে "সূত্র:" শিরোনামে ব্যবহৃত লিংকগুলো তালিকা করবে। ফলাফলে তথ্য না থাকলে স্পষ্ট বলবে যে নিশ্চিত তথ্য পাওয়া যায়নি — অনুমান করবে না।`
