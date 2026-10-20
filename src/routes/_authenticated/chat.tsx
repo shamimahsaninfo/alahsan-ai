@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { withStorageShim } from "@/lib/page-shim";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
@@ -10,7 +10,7 @@ import {
   ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, 
   BookmarkCheck, Share2, Globe, Sparkles, Brain, Loader2, Moon, Sun, Pencil, 
   Pin, PinOff, Archive, ArchiveRestore, RotateCcw, Phone, Camera, MonitorUp, 
-  ChevronDown, Smartphone, Monitor 
+  ChevronDown, Smartphone, Monitor, UploadCloud, WifiOff, X, ZoomIn
 } from "lucide-react";
 
 import { VoiceCallDialog } from "@/components/chat/VoiceCallDialog";
@@ -41,7 +41,7 @@ type Msg = { role: "user" | "assistant"; content: string; image?: string; images
 type Conv = { id: string; title: string; pinned: boolean; archived: boolean };
 
 const MODES = [
-  {id: "islamic",label: "ইসলামিক গবেষণা",hint: "কোরআন, নির্ভরযোগ্য হাদিস, তাফসির, উসুলুল ফিকহ ও স্বীকৃত ফিকহি মতামতের আলোকে গভীর গবেষণা করো। আরবি মূল পাঠ, সঠিক সূত্র, হাদিসের মান, প্রাসঙ্গিকতা ও আলেমদের মতপার্থক্য যাচাই করে দলিলভিত্তিক বিশ্লেষণ দাও।"},
+  {id: "islamic",label: "ইসলামিক গবেষণা",hint: "কোরআন, নির্ভরযোগ্য হাদিস, তাফসির, উসুলুল ফিকহ ও স্বীকৃত ফিকহি মতামতের আলোকে গভীর গবেষণা করো। আরবি মূল পাঠ, সঠিক সূত্র, হাদিসের মান, প্রাসঙ্গিকতা ও আলেমদের মতপার্থক্য যাচাই করে দলিলভিত্তিক বিশ্লেষণ দাও। আয়াত বা হাদিস বানিয়ে বলো না, দুর্বল দলিলকে সহিহ বলো না এবং মতভেদ গোপন করো না। নিশ্চিত তথ্য ও ব্যাখ্যা আলাদা রাখো; জটিল ফতোয়ায় যোগ্য মুফতির পরামর্শ নিতে বলো।"},
   {id: "fast",label: "ফ্ল্যাশ-দ্রুত",hint: "তুমি আল আহসান AI-এর অতি-দ্রুত, নির্ভুল ও দক্ষ উত্তর ইঞ্জিন। প্রধান লক্ষ্য হলো সম্ভব হলে ১–২ সেকেন্ডের মধ্যে উত্তর তৈরি ও পাঠানো। অগ্রাধিকার: গতি, প্রাসঙ্গিকতা, নির্ভুলতা এবং স্পষ্টতা।"},
   {id: "creative",label: "সৃজনশীল চিন্তা ",hint: "বিশ্বমানের উদ্ভাবক, গবেষক ও কৌশলবিদের মতো চিন্তা করো। বিজ্ঞান, প্রযুক্তি, ইতিহাস, প্রকৃতি, মহাবিশ্ব ও বর্তমান বিশ্বসহ যেকোনো বিষয়ে গভীর বিশ্লেষণ করো।"},
   {id: "truth",label: "সত্য ও নির্ভুলতা",hint: "সর্বোচ্চ গুরুত্ব দিয়ে প্রতিটি তথ্য, তত্ত্ব ও যুক্তি যাচাই করো। কখনো মিথ্যা, মনগড়া তথ্য, বিভ্রান্তিকর দাবি বা ভিত্তিহীন উত্তর দেবে না।"},
@@ -113,7 +113,7 @@ async function makePdf(sections: { title?: string; text: string }[], name: strin
       pdf.addImage(part.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pw, (part.height * pw) / canvas.width);
     }
     saveBlob(pdf.output("blob"), name);
-  } catch { alert("PDF তৈরি করা যায়নি, আবার চেষ্টা করুন।"); }
+  } catch { toast.error("PDF তৈরি করা যায়নি, আবার চেষ্টা করুন।"); }
   finally { box.remove(); }
 }
 
@@ -124,7 +124,7 @@ async function exportAnswer(content: string, kind: "md" | "doc" | "pdf") {
     const { Document, Packer, Paragraph, TextRun } = await import("docx");
     const d = new Document({ sections: [{ children: content.split("\n").map((l) => new Paragraph({ children: [new TextRun({ text: l, font: "Nirmala UI", size: 24 })] })) }] });
     saveBlob(await Packer.toBlob(d), "al-ahsan-answer.docx");
-  } catch { alert("Word ফাইল তৈরি করা যায়নি।"); }
+  } catch { toast.error("Word ফাইল তৈরি করা যায়নি।"); }
 }
 
 function stripEmoji(t: string): string {
@@ -159,7 +159,7 @@ function speak(text: string) {
   }
   if (cur.trim()) chunks.push(cur);
   const run = () => {
-    if (/[\u0980-\u09FF]/.test(clean) && !pickVoice(true)) { alert("আপনার ডিভাইসে বাংলা ভয়েস প্যাক নেই।"); return; }
+    if (/[\u0980-\u09FF]/.test(clean) && !pickVoice(true)) { toast.warning("আপনার ডিভাইসে বাংলা ভয়েস প্যাক নেই।"); return; }
     chunks.forEach((c) => {
       const u = new SpeechSynthesisUtterance(c.trim());
       const bn = /[\u0980-\u09FF]/.test(c);
@@ -206,7 +206,8 @@ function WorkflowStepper({ stages, current }: { stages: string[]; current: numbe
       <div className="inline-block text-base font-semibold live-status-shimmer tracking-normal">
         {label.replace(/\.+$/, "").trim()}
       </div>
-      <div className="mt-1.5 text-sm text-muted-foreground tabular-nums">
+      <div className="mt-1.5 text-sm text-muted-foreground tabular-nums flex items-center gap-2">
+        <Loader2 size={12} className="animate-spin text-primary" />
         {bnNum(sec)} সেকেন্ড
       </div>
     </div>
@@ -279,7 +280,6 @@ function HtmlPreview({ code, streaming }: { code: string; streaming?: boolean })
   );
 }
 
-// Custom Code Block Component for Markdown
 function CodeBlock({ className, children, ...rest }: any) {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
@@ -304,7 +304,7 @@ function CodeBlock({ className, children, ...rest }: any) {
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
-      <div className="p-4 overflow-x-auto">
+      <div className="p-4 overflow-x-auto custom-scrollbar">
         <code className={`text-sm font-mono text-zinc-50 ${className || ""}`} {...rest}>
           {children}
         </code>
@@ -329,22 +329,17 @@ function LiveLinkCard({ href }: { href: string }) {
   );
 }
 
-const makeMd = (streaming: boolean) => ({
-  code({ node, inline, className, children, ...rest }: any) {
-    const text = String(children ?? "");
-    if (!inline && /language-html/.test(className || "") && /<(html|body|!doctype)/i.test(text)) return <HtmlPreview code={text} streaming={streaming} />;
-    if (!inline && /language-chart/.test(className || "") && !streaming) return <ChartBlock json={text} />;
-    if (!inline) return <CodeBlock className={className} {...rest}>{children}</CodeBlock>;
-    return <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-primary" {...rest}>{children}</code>;
-  },
-  a({ href, children }: any) {
-    const h = String(href ?? "");
-    if (typeof window !== "undefined" && h.startsWith(window.location.origin) && /\/(project\d+|p\/)/.test(h)) return <LiveLinkCard href={h} />;
-    return <a href={h} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">{children}</a>;
-  },
-});
-const mdDone = makeMd(false);
-const mdStreaming = makeMd(true);
+// Image Lightbox Component
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <button onClick={onClose} className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-black/50 rounded-full transition-colors">
+        <X size={24} />
+      </button>
+      <img src={src} alt="Full screen" className="max-w-full max-h-full object-contain rounded-md shadow-2xl" onClick={(e) => e.stopPropagation()} />
+    </div>
+  );
+}
 
 // --- Main Page Component ---
 
@@ -380,6 +375,9 @@ function ChatPage() {
   const [cfg, setCfg] = useState<{ welcome_title?: string; welcome_subtitle?: string; suggestions?: string }>({});
   const [speaking, setSpeaking] = useState<number | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // Refs
   const fileRef = useRef<HTMLInputElement>(null);
@@ -399,6 +397,15 @@ function ChatPage() {
   useEffect(() => { fetch("/api/settings").then((r) => r.json()).then(setCfg).catch(() => {}); }, []);
   useEffect(() => { loadConvs(); }, []);
   
+  // Network Status
+  useEffect(() => {
+    const handleOnline = () => { setIsOffline(false); toast.success("ইন্টারনেট সংযোগ ফিরে এসেছে।"); };
+    const handleOffline = () => { setIsOffline(true); toast.error("ইন্টারনেট সংযোগ বিচ্ছিন্ন হয়েছে।"); };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
+  }, []);
+
   // Auto-scroll logic
   useEffect(() => {
     if (loading) {
@@ -409,7 +416,7 @@ function ChatPage() {
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
     setShowScrollButton(!isNearBottom);
   };
 
@@ -426,7 +433,6 @@ function ChatPage() {
     }
   };
 
-  // Reset textarea height when input is cleared
   useEffect(() => {
     if (input === "" && textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -484,6 +490,30 @@ function ChatPage() {
       saveBookmarks(next);
       return next;
     });
+  };
+
+  // --- Drag and Drop Handlers ---
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      const imageFiles = files.filter(f => f.type.startsWith("image/"));
+      const docFiles = files.filter(f => !f.type.startsWith("image/"));
+      
+      if (imageFiles.length > 0) pickImages(imageFiles);
+      if (docFiles.length > 0) pickDoc(docFiles[0]); // Only take the first doc
+    }
   };
 
   const pickImages = (fileList: FileList | File[]) => {
@@ -590,6 +620,8 @@ function ChatPage() {
   };
 
   const send = async (override?: string, base?: Msg[], regen = false) => {
+    if (isOffline) return toast.error("ইন্টারনেট সংযোগ নেই। সংযোগ ফিরে এলে আবার চেষ্টা করুন।");
+    
     const cur = base ?? msgs;
     const imgs = override !== undefined ? [] : images;
     const d = override !== undefined ? null : doc;
@@ -650,7 +682,7 @@ function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token}` },
-        body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? (prevSite ? `${apiText}\n\n=== বর্তমান ওয়েবসাইট (ভার্সন ${siteVersion - 1}) ===\nনির্দেশ: ব্যবহারকারী এই সাইটে পরিবর্তন চাইলে শূন্য থেকে নতুন সাইট বানাবে না; নিচের কোডের ওপরই শুধু চাওয়া অংশ বদলে বাকি সব ডিজাইন, লেখা, ছবি, তথ্য হুবহু রেখে সম্পূর্ণ নতুন ভার্সন (ভার্সন ${siteVersion}) একটি পূর্ণ \`\`\`html ব্লকে দেবে। আগের ভার্সনে ফিরতে বললে সেই ভার্সনটি হুবহু দেবে।\n\`\`\`html\n${prevSite.slice(0, 60000)}\n\`\`\`` : apiText) : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 100000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }), ...(model ? { model } : {}) }),
+        body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? (prevSite ? `${apiText}\n\n=== বর্তমান ওয়েবসাইট (ভার্সন ${siteVersion - 1}) ===\nনির্দেশ: ব্যবহারকারী এই সাইটে পরিবর্তন চাইলে শূন্য থেকে নতুন সাইট বানাবেবিধা না; নিচের কোডের ওপরই শুধু চাওয়া অংশ বদলে বাকি সব ডিজাইন, লেখা, ছবি, তথ্য হুবহু রেখে সম্পূর্ণ নতুন ভার্সন (ভার্সন ${siteVersion}) একটি পূর্ণ \`\`\`html ব্লকে দেবে। আগের ভার্সনে ফিরতে বললে সেই ভার্সনটি হুবহু দেবে।\n\`\`\`html\n${prevSite.slice(0, 60000)}\n\`\`\`` : apiText) : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 100000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }), ...(model ? { model } : {}) }),
         signal: abortRef.current.signal,
       });
       
@@ -761,8 +793,63 @@ function ChatPage() {
     navigate({ to: "/", replace: true });
   };
 
+  // Memoize markdown components to prevent unnecessary re-renders and fix the crash
+  const mdComponents = useMemo(() => {
+    return {
+      code({ node, inline, className, children, ...rest }: any) {
+        const text = String(children ?? "");
+        if (!inline && /language-html/.test(className || "") && /<(html|body|!doctype)/i.test(text)) return <HtmlPreview code={text} streaming={loading} />;
+        if (!inline && /language-chart/.test(className || "") && !loading) return <ChartBlock json={text} />;
+        if (!inline) return <CodeBlock className={className} {...rest}>{children}</CodeBlock>;
+        return <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-primary" {...rest}>{children}</code>;
+      },
+      a({ href, children }: any) {
+        const h = String(href ?? "");
+        if (typeof window !== "undefined" && h.startsWith(window.location.origin) && /\/(project\d+|p\/)/.test(h)) return <LiveLinkCard href={h} />;
+        return <a href={h} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">{children}</a>;
+      },
+      img({ src, alt }: any) {
+        return (
+          <div className="relative group inline-block cursor-zoom-in my-2" onClick={() => src && setLightboxImage(src)}>
+            <img src={src} alt={alt} className="rounded-xl border border-border shadow-sm max-h-96 object-contain" loading="lazy" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl flex items-center justify-center">
+              <ZoomIn className="text-white opacity-0 group-hover:opacity-100 drop-shadow-md" size={32} />
+            </div>
+          </div>
+        );
+      },
+      p({ children }: any) {
+        const text = String(children);
+        const isArabic = /[\u0600-\u06FF]/.test(text);
+        if (isArabic && text.length > 10) {
+          return <p className="text-2xl leading-loose text-right font-arabic my-4 text-foreground/90" dir="rtl" style={{ fontFamily: "'Amiri', 'Scheherazade New', serif" }}>{children}</p>;
+        }
+        return <p className="my-2 leading-relaxed">{children}</p>;
+      }
+    };
+  }, [loading]);
+
   return (
-    <div className="flex h-dvh w-full max-w-full overflow-hidden bg-background text-foreground selection:bg-primary/20">
+    <div 
+      className="flex h-dvh w-full max-w-full overflow-hidden bg-background text-foreground selection:bg-primary/20"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag & Drop Overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center border-4 border-dashed border-primary/50 m-4 rounded-3xl animate-in fade-in duration-200 pointer-events-none">
+          <div className="bg-card p-8 rounded-full shadow-2xl mb-6 animate-bounce">
+            <UploadCloud size={64} className="text-primary" />
+          </div>
+          <h2 className="text-3xl font-display font-bold text-foreground">ফাইল বা ছবি এখানে ছাড়ুন</h2>
+          <p className="text-muted-foreground mt-2">AI স্বয়ংক্রিয়ভাবে এটি বিশ্লেষণ করবে</p>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxImage && <ImageLightbox src={lightboxImage} onClose={() => setLightboxImage(null)} />}
+
       {/* Sidebar */}
       <aside className={`${sidebar ? "flex" : "hidden"} fixed inset-y-0 left-0 z-30 w-72 max-w-[85vw] flex-col overflow-y-auto border-r border-border/50 bg-card/50 backdrop-blur-xl md:static md:flex transition-all duration-300 ease-in-out shadow-2xl md:shadow-none`}>
         <div className="flex items-center gap-3 p-5 border-b border-border/50">
@@ -857,6 +944,14 @@ function ChatPage() {
       
       {/* Main Chat Area */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background/95 relative">
+        
+        {/* Offline Banner */}
+        {isOffline && (
+          <div className="bg-destructive/90 text-destructive-foreground px-4 py-2 text-sm flex items-center justify-center gap-2 z-50">
+            <WifiOff size={16} /> ইন্টারনেট সংযোগ বিচ্ছিন্ন। কিছু ফিচার কাজ নাও করতে পারে।
+          </div>
+        )}
+
         {/* Header */}
         <header className="flex min-w-0 items-center justify-between gap-2 bg-background/80 backdrop-blur-md px-4 py-3 border-b border-border/40 z-10 sticky top-0">
           <div className="flex items-center gap-3">
@@ -972,7 +1067,7 @@ function ChatPage() {
                         {((m.images && m.images.length > 0) ? m.images : m.image ? [m.image] : []).length > 0 && (
                           <div className="mb-3 flex flex-wrap gap-2">
                             {((m.images && m.images.length > 0) ? m.images : m.image ? [m.image] : []).map((src, idx) => (
-                              <img key={idx} src={src} alt={`ছবি ${idx + 1}`} className="max-h-48 rounded-xl border border-primary-foreground/20 object-cover shadow-sm" />
+                              <img key={idx} src={src} alt={`ছবি ${idx + 1}`} className="max-h-48 rounded-xl border border-primary-foreground/20 object-cover shadow-sm cursor-zoom-in" onClick={() => setLightboxImage(src)} />
                             ))}
                           </div>
                         )}
@@ -983,12 +1078,11 @@ function ChatPage() {
                         {i === msgs.length - 1 && flow && <WorkflowStepper stages={flow.stages} current={flow.current} />}
                         {m.content ? (() => {
                           const { body, followups } = splitFollowups(stripEmoji(m.content));
-                          const streamingNow = loading && i === msgs.length - 1;
                           return (
                           <>
-                            <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={streamingNow ? mdStreaming : mdDone}>{body}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={mdComponents}>{body}</ReactMarkdown>
                             
-                            {!streamingNow && followups.length > 0 && i === msgs.length - 1 && (
+                            {!loading && followups.length > 0 && i === msgs.length - 1 && (
                               <div className="not-prose mt-6 flex flex-col gap-2">
                                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">সম্পর্কিত প্রশ্ন</span>
                                 {followups.map((f) => (
@@ -1071,7 +1165,20 @@ function ChatPage() {
         {callOpen && <VoiceCallDialog messages={msgs.filter(message => !message.error)} onClose={() => setCallOpen(false)} />}
         
         {/* Input Area */}
-        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border/40 px-3 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-4 z-10">
+        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border/40 px-3 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-4 z-10 relative">
+          
+          {/* Floating Stop Button */}
+          {loading && (
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-20">
+              <button 
+                onClick={() => abortRef.current?.abort()} 
+                className="flex items-center gap-2 bg-background border border-border shadow-md rounded-full px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors animate-in slide-in-from-bottom-2"
+              >
+                <Square size={14} className="fill-current text-destructive" /> জেনারেট থামান
+              </button>
+            </div>
+          )}
+
           <div className="mx-auto w-full max-w-4xl">
             
             {/* Previews (Images/Docs) */}
@@ -1079,7 +1186,7 @@ function ChatPage() {
               <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
                 {images.map((src, idx) => (
                   <div key={idx} className="relative group rounded-xl border border-border bg-card overflow-hidden shadow-sm">
-                    <img src={src} alt={`ছবি ${idx + 1}`} className="h-16 w-16 object-cover" />
+                    <img src={src} alt={`ছবি ${idx + 1}`} className="h-16 w-16 object-cover cursor-zoom-in" onClick={() => setLightboxImage(src)} />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <button type="button" onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))} className="text-white bg-destructive/80 rounded-full p-1 hover:bg-destructive">
                         <Trash2 size={14} />
