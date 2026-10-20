@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { withStorageShim } from "@/lib/page-shim";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
@@ -10,7 +10,7 @@ import {
   ExternalLink, ImagePlus, Compass, Paperclip, Bookmark as BookmarkIcon, 
   BookmarkCheck, Share2, Globe, Sparkles, Brain, Loader2, Moon, Sun, Pencil, 
   Pin, PinOff, Archive, ArchiveRestore, RotateCcw, Phone, Camera, MonitorUp, 
-  ChevronDown, Smartphone, Monitor, UploadCloud, WifiOff, X, ZoomIn
+  ChevronDown, Smartphone, Monitor, UploadCloud, WifiOff, X, ZoomIn, BookOpen
 } from "lucide-react";
 
 import { VoiceCallDialog } from "@/components/chat/VoiceCallDialog";
@@ -41,15 +41,15 @@ type Msg = { role: "user" | "assistant"; content: string; image?: string; images
 type Conv = { id: string; title: string; pinned: boolean; archived: boolean };
 
 const MODES = [
-  {id: "islamic",label: "ইসলামিক গবেষণা",hint: "কোরআন, নির্ভরযোগ্য হাদিস, তাফসির, উসুলুল ফিকহ ও স্বীকৃত ফিকহি মতামতের আলোকে গভীর গবেষণা করো। আরবি মূল পাঠ, সঠিক সূত্র, হাদিসের মান, প্রাসঙ্গিকতা ও আলেমদের মতপার্থক্য যাচাই করে দলিলভিত্তিক বিশ্লেষণ দাও। আয়াত বা হাদিস বানিয়ে বলো না, দুর্বল দলিলকে সহিহ বলো না এবং মতভেদ গোপন করো না। নিশ্চিত তথ্য ও ব্যাখ্যা আলাদা রাখো; জটিল ফতোয়ায় যোগ্য মুফতির পরামর্শ নিতে বলো।"},
+  {id: "islamic",label: "ইসলামিক গবেষণা",hint: "কোরআন, নির্ভরযোগ্য হাদিস, তাফসির, উসুলুল ফিকহ ও স্বীকৃত ফিকহি মতামতের আলোকে গভীর গবেষণা করো। আরবি মূল পাঠ, সঠিক সূত্র, হাদিসের মান ও আলেমদের মতপার্থক্য দলিলভিত্তিক বিশ্লেষণ দাও।"},
   {id: "fast",label: "ফ্ল্যাশ-দ্রুত",hint: "তুমি আল আহসান AI-এর অতি-দ্রুত, নির্ভুল ও দক্ষ উত্তর ইঞ্জিন। প্রধান লক্ষ্য হলো সম্ভব হলে ১–২ সেকেন্ডের মধ্যে উত্তর তৈরি ও পাঠানো। অগ্রাধিকার: গতি, প্রাসঙ্গিকতা, নির্ভুলতা এবং স্পষ্টতা।"},
-  {id: "creative",label: "সৃজনশীল চিন্তা ",hint: "বিশ্বমানের উদ্ভাবক, গবেষক ও কৌশলবিদের মতো চিন্তা করো। বিজ্ঞান, প্রযুক্তি, ইতিহাস, প্রকৃতি, মহাবিশ্ব ও বর্তমান বিশ্বসহ যেকোনো বিষয়ে গভীর বিশ্লেষণ করো।"},
-  {id: "truth",label: "সত্য ও নির্ভুলতা",hint: "সর্বোচ্চ গুরুত্ব দিয়ে প্রতিটি তথ্য, তত্ত্ব ও যুক্তি যাচাই করো। কখনো মিথ্যা, মনগড়া তথ্য, বিভ্রান্তিকর দাবি বা ভিত্তিহীন উত্তর দেবে না।"},
-  {id: "study",label: "স্মার্ট স্টাডি",hint: "দক্ষ শিক্ষকের মতো গণিতের সূত্র ও সমাধান, আরবি নাহু-সরফ, পদার্থবিজ্ঞান, জীববিজ্ঞান, রসায়ন ও ইংরেজিসহ সব বিষয় সহজভাবে ধাপে ধাপে শেখাও।"},
-  {id: "write",label: "সাহিত্যিক লেখালেখি",hint: "প্রথিতযশা সাহিত্যিক ও অভিজ্ঞ গ্রন্থকারের মতো ভাষার সৌন্দর্য, গভীরতা, আবেগ ও সৃজনশীলতা দিয়ে লেখো।"},
-  {id: "doctor",label: "মেডিকেল বিশেষজ্ঞ",hint: "অভিজ্ঞ চিকিৎসকের মতো উপসর্গ, রোগের সম্ভাব্য কারণ, পরীক্ষার রিপোর্ট ও চিকিৎসাসংক্রান্ত তথ্য বৈজ্ঞানিক প্রমাণের ভিত্তিতে বিশ্লেষণ করো।"},
-  {id: "websearch",label: "ইন্টারনেট সার্চ",hint: "যেকোনো বিষয়ে ইন্টারনেটে গভীর অনুসন্ধান করো। সর্বশেষ খবর, বিজ্ঞান, প্রযুক্তি, ইতিহাস, গবেষণা, পণ্য ও বিশ্বসংক্রান্ত তথ্য নির্ভরযোগ্য একাধিক উৎস থেকে খুঁজে যাচাই করো।"},
-  {id: "code",label: "আল্টিমেট কোডিং",hint: "বিশ্বমানের AI সফটওয়্যার ইঞ্জিনিয়ার ও অ্যাপ বিল্ডারের মতো কাজ করো। জটিল ওয়েব অ্যাপ তৈরি, সম্পূর্ণ প্রজেক্ট বাস্তবায়ন, UI/UX ডিজাইন, API ও ডেটাবেস সংযোগ, বাগ ফিক্স এবং কোড অপ্টিমাইজেশন করো।"},
+  {id: "creative",label: "সৃজনশীল চিন্তা ",hint: "বিশ্বমানের উদ্ভাবক, গবেষক ও কৌশলবিদের মতো চিন্তা করো। বিজ্ঞান, প্রযুক্তি, ইতিহাস ও ভবিষ্যৎ সম্ভাবনা মূল্যায়ন করো।"},
+  {id: "truth",label: "সত্য ও নির্ভুলতা",hint: "সর্বোচ্চ গুরুত্ব দিয়ে প্রতিটি তথ্য ও যুক্তি যাচাই করো। কোনো বিভ্রান্তিকর দাবি বা ভিত্তিহীন উত্তর দেবে না।"},
+  {id: "study",label: "স্মার্ট স্টাডি",hint: "দক্ষ শিক্ষকের মতো গণিতের সূত্র ও সমাধান, আরবি নাহু-সরফ, পদার্থবিজ্ঞান, জীববিজ্ঞান, রসায়ন ও ইংরেজি সহজভাবে ধাপে ধাপে শেখাও।"},
+  {id: "write",label: "সাহিত্যিক লেখালেখি",hint: "প্রথিতযশা সাহিত্যিকের মতো ভাষার সৌন্দর্য, গভীরতা ও মার্জিত শব্দচয়ন দিয়ে মৌলিক সাহিত্য রচনা করো।"},
+  {id: "doctor",label: "মেডিকেল বিশেষজ্ঞ",hint: "অভিজ্ঞ চিকিৎসকের মতো উপসর্গ ও স্বাস্থ্য তথ্য বৈজ্ঞানিক প্রমাণের ভিত্তিতে বিশ্লেষণ করো এবং বিপৎসংকেত থাকলে জরুরি চিকিৎসার নির্দেশ দাও।"},
+  {id: "websearch",label: "ইন্টারনেট সার্চ",hint: "যেকোনো বিষয়ে ইন্টারনেটে গভীর অনুসন্ধান করো এবং নির্ভরযোগ্য একাধিক উৎস থেকে যাচাইকৃত তথ্য দাও।"},
+  {id: "code",label: "আল্টিমেট কোডিং",hint: "বিশ্বমানের AI সফটওয়্যার ইঞ্জিনিয়ার ও অ্যাপ বিল্ডারের মতো সম্পূর্ণ প্রজেক্ট বাস্তবায়ন, UI/UX ডিজাইন ও বাগ ফিক্স করো।"},
 ];
 
 const STAGE_CONFIG: Record<string, { label: string; sub: string; icon: string }> = {
@@ -75,7 +75,6 @@ const WAIT_HINTS = [
 
 const siteSlugRef = { current: "" };
 
-// --- Helper Functions ---
 function splitFollowups(t: string): { body: string; followups: string[] } {
   const followups: string[] = [];
   const body = t.replace(/\[\[প্রশ্ন:\s*([^\]]+)\]\]/g, (_m, q) => { followups.push(String(q).trim()); return ""; }).replace(/\n+\s*(পরবর্তী প্রশ্ন|ফলো-আপ)[^\n]*\s*$/m, "").trimEnd();
@@ -143,6 +142,7 @@ function speak(text: string) {
   synth.cancel();
   const clean = stripEmoji(text)
     .replace(/```[\s\S]*?(```|$)/g, " কোড অংশ। ")
+    .replace(/<[^>]*>/g, " ")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/https?:\/\/\S+/g, " ")
@@ -179,7 +179,81 @@ function speak(text: string) {
   }
 }
 
-// --- Components ---
+// --- New Advanced UI Components ---
+
+// ডিপ-থিঙ্কিং অ্যাকর্ডিয়ন
+function ThinkingAccordion({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+  const [open, setOpen] = useState(isStreaming);
+  useEffect(() => { if (isStreaming) setOpen(true); }, [isStreaming]);
+
+  return (
+    <div className="not-prose my-3.5 rounded-2xl border border-primary/20 bg-primary/5 overflow-hidden transition-all shadow-sm">
+      <button 
+        onClick={() => setOpen(!open)} 
+        className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <Brain size={16} className={isStreaming ? "animate-pulse text-primary" : "text-primary/70"} />
+          {isStreaming ? "গভীর চিন্তন ও যাচাই প্রক্রিয়া চলছে..." : "গভীর চিন্তন ও শরয়ী যুক্তি বিশ্লেষণ (সম্পন্ন)"}
+        </span>
+        <ChevronDown size={15} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="px-4 py-3 border-t border-primary/10 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed font-mono bg-background/60 max-h-64 overflow-y-auto custom-scrollbar">
+          {content}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// রাজকীয় ইসলামিক দলীল কার্ড
+function DalilCard({ arabic, bangla, source, grade, type, body }: { arabic?: string; bangla?: string; source?: string; grade?: string; type?: string; body?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    const text = `${arabic ? arabic + "\n\n" : ""}${bangla || body || ""}\n\nসূত্র: ${source || ""}${grade ? " (মান: " + grade + ")" : ""}`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="not-prose my-5 rounded-2xl border-2 border-emerald-600/30 bg-gradient-to-br from-emerald-950/20 via-background to-emerald-950/10 p-5 shadow-lg relative overflow-hidden transition-all hover:border-emerald-500/50">
+      <div className="absolute top-0 right-0 w-36 h-36 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="flex items-center justify-between pb-3 border-b border-emerald-600/20 mb-3">
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-500 uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 shadow-sm">
+          <BookOpen size={13} /> {type === "quran" ? "পবিত্র কুরআনুল কারীম" : "সহিহ হাদিস শরীফ"}
+        </span>
+        <div className="flex items-center gap-2">
+          {grade && (
+            <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+              মান: {grade}
+            </span>
+          )}
+          <button onClick={handleCopy} className="text-emerald-400 hover:text-emerald-200 p-1 rounded hover:bg-emerald-900/30 transition-colors" title="দলীল কপি করুন">
+            {copied ? <Check size={14} className="text-emerald-300"/> : <Copy size={14}/>}
+          </button>
+        </div>
+      </div>
+      {arabic && (
+        <p className="text-2xl sm:text-3xl font-arabic text-right leading-loose text-foreground my-3" dir="rtl" style={{ fontFamily: "'Amiri', 'Scheherazade New', serif" }}>
+          {arabic}
+        </p>
+      )}
+      {(bangla || body) && (
+        <p className="text-sm sm:text-base text-foreground/90 leading-relaxed font-medium my-2">
+          {bangla || body}
+        </p>
+      )}
+      {source && (
+        <div className="mt-3 pt-2.5 border-t border-emerald-600/10 flex items-center justify-between text-xs text-emerald-400/90 font-medium">
+          <span>তথ্যসূত্র: {source}</span>
+          <span className="text-[11px] text-muted-foreground">আল আহসান ফতোয়া ও দলীল ভান্ডার</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function WorkflowStepper({ stages, current }: { stages: string[]; current: number }) {
   const finished = current >= stages.length;
@@ -235,7 +309,7 @@ function HtmlPreview({ code, streaming }: { code: string; streaming?: boolean })
         <div className="flex items-center gap-2 border-b border-border px-3 py-2 text-xs text-primary bg-muted/30">
           <span className="typing"><i /><i /><i /></span> ওয়েবসাইট তৈরি হচ্ছে… ({code.length} অক্ষর)
         </div>
-        <pre className="h-[200px] overflow-hidden p-3 text-xs text-muted-foreground bg-zinc-950 text-zinc-300"><code>{code.slice(-1500)}</code></pre>
+        <pre className="h-[200px] overflow-hidden p-3 text-xs text-muted-foreground bg-zinc-950 text-zinc-300 font-mono"><code>{code.slice(-1500)}</code></pre>
       </div>
     );
   }
@@ -246,34 +320,34 @@ function HtmlPreview({ code, streaming }: { code: string; streaming?: boolean })
   };
 
   return (
-    <div className="not-prose my-4 overflow-hidden rounded-xl border border-border bg-card shadow-md transition-all">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs bg-muted/30">
-        <div className="flex bg-background rounded-md border border-border p-0.5">
-          <button onClick={() => setTab("run")} className={`flex items-center gap-1.5 rounded px-2.5 py-1 transition-colors ${tab === "run" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}><MonitorPlay size={14} /> প্রিভিউ</button>
-          <button onClick={() => setTab("code")} className={`flex items-center gap-1.5 rounded px-2.5 py-1 transition-colors ${tab === "code" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}><Code2 size={14} /> কোড</button>
+    <div className="not-prose my-4 overflow-hidden rounded-2xl border border-border bg-card shadow-lg transition-all">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5 text-xs bg-muted/30">
+        <div className="flex bg-background rounded-lg border border-border p-0.5">
+          <button onClick={() => setTab("run")} className={`flex items-center gap-1.5 rounded-md px-3 py-1 transition-colors ${tab === "run" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}><MonitorPlay size={14} /> প্রিভিউ</button>
+          <button onClick={() => setTab("code")} className={`flex items-center gap-1.5 rounded-md px-3 py-1 transition-colors ${tab === "code" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}><Code2 size={14} /> কোড</button>
         </div>
         
         {tab === "run" && (
-          <div className="flex bg-background rounded-md border border-border p-0.5 ml-2 hidden sm:flex">
-            <button onClick={() => setDevice("desktop")} className={`p-1 rounded ${device === "desktop" ? "bg-muted text-foreground" : "text-muted-foreground"}`} title="Desktop View"><Monitor size={14} /></button>
-            <button onClick={() => setDevice("mobile")} className={`p-1 rounded ${device === "mobile" ? "bg-muted text-foreground" : "text-muted-foreground"}`} title="Mobile View"><Smartphone size={14} /></button>
+          <div className="flex bg-background rounded-lg border border-border p-0.5 ml-2 hidden sm:flex">
+            <button onClick={() => setDevice("desktop")} className={`p-1.5 rounded-md ${device === "desktop" ? "bg-muted text-foreground" : "text-muted-foreground"}`} title="Desktop View"><Monitor size={14} /></button>
+            <button onClick={() => setDevice("mobile")} className={`p-1.5 rounded-md ${device === "mobile" ? "bg-muted text-foreground" : "text-muted-foreground"}`} title="Mobile View"><Smartphone size={14} /></button>
           </div>
         )}
 
         <span className="flex-1" />
         
-        <button onClick={async () => { await navigator.clipboard.writeText(code); setOk(true); setTimeout(() => setOk(false), 1500); }} className="flex items-center gap-1 px-2 py-1 text-muted-foreground hover:text-primary transition-colors">{ok ? <Check size={14} className="text-green-500"/> : <Copy size={14} />} কপি</button>
-        <button onClick={openFull} className="flex items-center gap-1 px-2 py-1 text-muted-foreground hover:text-primary transition-colors"><Maximize2 size={14} /> ফুলস্ক্রিন</button>
-        <button onClick={restoreVersion} disabled={restore === "busy"} className="flex items-center gap-1 px-2 py-1 text-primary hover:text-primary/80 font-medium transition-colors" title="এই ভার্সনটি লাইভ লিংকে বসান">{restore === "done" ? <><Check size={14} /> লাইভ হয়েছে</> : restore === "err" ? "ব্যর্থ" : restore === "busy" ? <Loader2 size={14} className="animate-spin" /> : <><Globe size={14} /> লাইভ করুন</>}</button>
+        <button onClick={async () => { await navigator.clipboard.writeText(code); setOk(true); setTimeout(() => setOk(false), 1500); }} className="flex items-center gap-1 px-2.5 py-1 text-muted-foreground hover:text-primary transition-colors">{ok ? <Check size={14} className="text-green-500"/> : <Copy size={14} />} কপি</button>
+        <button onClick={openFull} className="flex items-center gap-1 px-2.5 py-1 text-muted-foreground hover:text-primary transition-colors"><Maximize2 size={14} /> ফুলস্ক্রিন</button>
+        <button onClick={restoreVersion} disabled={restore === "busy"} className="flex items-center gap-1 px-2.5 py-1 text-primary hover:text-primary/80 font-medium transition-colors" title="এই ভার্সনটি লাইভ লিংকে বসান">{restore === "done" ? <><Check size={14} /> লাইভ হয়েছে</> : restore === "err" ? "ব্যর্থ" : restore === "busy" ? <Loader2 size={14} className="animate-spin" /> : <><Globe size={14} /> লাইভ করুন</>}</button>
       </div>
       
       <div className="bg-zinc-100 dark:bg-zinc-900 flex justify-center items-start overflow-hidden">
         {tab === "run" ? (
-          <div className={`transition-all duration-300 ease-in-out ${device === "mobile" ? "w-[375px] border-x border-border shadow-2xl" : "w-full"}`}>
+          <div className={`transition-all duration-300 ease-in-out ${device === "mobile" ? "w-[375px] border-x border-border shadow-2xl my-2 rounded-xl overflow-hidden" : "w-full"}`}>
             <iframe title="ওয়েবসাইট প্রিভিউ" srcDoc={withStorageShim(code)} sandbox="allow-scripts allow-forms allow-modals allow-popups" className="h-[70vh] min-h-[520px] w-full bg-white sm:h-[80vh] sm:min-h-[650px]" />
           </div>
         ) : (
-          <pre className="w-full max-h-[70vh] min-h-[520px] overflow-auto p-4 text-sm bg-zinc-950 text-zinc-50 sm:max-h-[80vh] sm:min-h-[650px] font-mono leading-relaxed"><code>{code}</code></pre>
+          <pre className="w-full max-h-[70vh] min-h-[520px] overflow-auto p-4 text-sm bg-zinc-950 text-zinc-50 sm:max-h-[80vh] sm:min-h-[650px] font-mono leading-relaxed custom-scrollbar"><code>{code}</code></pre>
         )}
       </div>
     </div>
@@ -293,7 +367,7 @@ function CodeBlock({ className, children, ...rest }: any) {
   };
 
   return (
-    <div className="not-prose my-4 rounded-xl overflow-hidden border border-border bg-zinc-950 shadow-sm">
+    <div className="not-prose my-4 rounded-xl overflow-hidden border border-border bg-zinc-950 shadow-md">
       <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800">
         <span className="text-xs font-mono text-zinc-400 uppercase tracking-wider">{lang}</span>
         <button 
@@ -316,39 +390,37 @@ function CodeBlock({ className, children, ...rest }: any) {
 function LiveLinkCard({ href }: { href: string }) {
   const [ok, setOk] = useState(false);
   return (
-    <span className="not-prose my-4 flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 shadow-sm">
+    <span className="not-prose my-4 flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 shadow-md">
       <div className="flex items-center gap-2 text-primary font-medium">
-        <Globe size={16} /> আপনার লাইভ ওয়েবসাইট প্রস্তুত
+        <Globe size={18} /> আপনার লাইভ ওয়েবসাইট প্রস্তুত
       </div>
-      <span className="break-all text-sm text-muted-foreground bg-background p-2 rounded border border-border font-mono">{href}</span>
+      <span className="break-all text-sm text-muted-foreground bg-background p-2.5 rounded-lg border border-border font-mono">{href}</span>
       <span className="flex flex-wrap gap-2 mt-1">
-        <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors no-underline"><ExternalLink size={16} /> ভিজিট করুন</a>
-        <button onClick={async () => { await navigator.clipboard.writeText(href); setOk(true); setTimeout(() => setOk(false), 1500); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">{ok ? <Check size={16} className="text-green-500"/> : <Copy size={16} />}{ok ? "কপি হয়েছে" : "লিংক কপি"}</button>
+        <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors no-underline"><ExternalLink size={16} /> ভিজিট করুন</a>
+        <button onClick={async () => { await navigator.clipboard.writeText(href); setOk(true); setTimeout(() => setOk(false), 1500); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">{ok ? <Check size={16} className="text-green-500"/> : <Copy size={16} />}{ok ? "কপি হয়েছে" : "লিংক কপি"}</button>
       </span>
     </span>
   );
 }
 
-// Image Lightbox Component
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
-      <button onClick={onClose} className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-black/50 rounded-full transition-colors">
-        <X size={24} />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <button onClick={onClose} className="absolute top-5 right-5 p-2 text-white/70 hover:text-white bg-black/50 rounded-full transition-colors">
+        <X size={26} />
       </button>
-      <img src={src} alt="Full screen" className="max-w-full max-h-full object-contain rounded-md shadow-2xl" onClick={(e) => e.stopPropagation()} />
+      <img src={src} alt="Full screen" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" onClick={(e) => e.stopPropagation()} />
     </div>
   );
 }
 
-// --- Main Page Component ---
+// --- Main Chat Page Component ---
 
 function ChatPage() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
   const admin = useIsAdmin(user.id);
   
-  // State
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState<number | null>(null);
   const [convs, setConvs] = useState<Conv[]>([]);
@@ -379,7 +451,6 @@ function ChatPage() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  // Refs
   const fileRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
   const recRef = useRef<any>(null);
@@ -388,7 +459,6 @@ function ChatPage() {
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Effects
   useEffect(() => { setMode(localStorage.getItem("ahsan-mode") || ""); }, []);
   useEffect(() => { setModel(localStorage.getItem("ahsan-model") ?? ""); }, []);
   useEffect(() => { setBookmarks(loadBookmarks()); }, []);
@@ -397,7 +467,6 @@ function ChatPage() {
   useEffect(() => { fetch("/api/settings").then((r) => r.json()).then(setCfg).catch(() => {}); }, []);
   useEffect(() => { loadConvs(); }, []);
   
-  // Network Status
   useEffect(() => {
     const handleOnline = () => { setIsOffline(false); toast.success("ইন্টারনেট সংযোগ ফিরে এসেছে।"); };
     const handleOffline = () => { setIsOffline(true); toast.error("ইন্টারনেট সংযোগ বিচ্ছিন্ন হয়েছে।"); };
@@ -406,7 +475,6 @@ function ChatPage() {
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
   }, []);
 
-  // Auto-scroll logic
   useEffect(() => {
     if (loading) {
       endRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
@@ -424,7 +492,6 @@ function ChatPage() {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   };
 
-  // Auto-resize textarea
   const handleInputResize = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     if (textareaRef.current) {
@@ -492,7 +559,6 @@ function ChatPage() {
     });
   };
 
-  // --- Drag and Drop Handlers ---
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -512,7 +578,7 @@ function ChatPage() {
       const docFiles = files.filter(f => !f.type.startsWith("image/"));
       
       if (imageFiles.length > 0) pickImages(imageFiles);
-      if (docFiles.length > 0) pickDoc(docFiles[0]); // Only take the first doc
+      if (docFiles.length > 0) pickDoc(docFiles[0]);
     }
   };
 
@@ -682,7 +748,7 @@ function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token}` },
-        body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? (prevSite ? `${apiText}\n\n=== বর্তমান ওয়েবসাইট (ভার্সন ${siteVersion - 1}) ===\nনির্দেশ: ব্যবহারকারী এই সাইটে পরিবর্তন চাইলে শূন্য থেকে নতুন সাইট বানাবেবিধা না; নিচের কোডের ওপরই শুধু চাওয়া অংশ বদলে বাকি সব ডিজাইন, লেখা, ছবি, তথ্য হুবহু রেখে সম্পূর্ণ নতুন ভার্সন (ভার্সন ${siteVersion}) একটি পূর্ণ \`\`\`html ব্লকে দেবে। আগের ভার্সনে ফিরতে বললে সেই ভার্সনটি হুবহু দেবে।\n\`\`\`html\n${prevSite.slice(0, 60000)}\n\`\`\`` : apiText) : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 100000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }), ...(model ? { model } : {}) }),
+        body: JSON.stringify({ messages: history.slice(-8).map((m, i, arr) => { const last = i === arr.length - 1; let content = (last ? (prevSite ? `${apiText}\n\n=== বর্তমান ওয়েবসাইট (ভার্সন ${siteVersion - 1}) ===\nনির্দেশ: ব্যবহারকারী এই সাইটে পরিবর্তন চাইলে শূন্য থেকে নতুন সাইট বানাবে না; নিচের কোডের ওপরই শুধু চাওয়া অংশ বদলে বাকি সব ডিজাইন, লেখা, ছবি, তথ্য হুবহু রেখে সম্পূর্ণ নতুন ভার্সন (ভার্সন ${siteVersion}) একটি পূর্ণ \`\`\`html ব্লকে দেবে। আগের ভার্সনে ফিরতে বললে সেই ভার্সনটি হুবহু দেবে।\n\`\`\`html\n${prevSite.slice(0, 60000)}\n\`\`\`` : apiText) : m.content).replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, "[ছবি]"); content = last ? content.slice(0, 100000) : content.length > 3000 ? content.slice(0, 2500) + "\n...[সংক্ষেপিত]" : content; return last ? { ...m, content } : { role: m.role, content }; }), ...(model ? { model } : {}) }),
         signal: abortRef.current.signal,
       });
       
@@ -707,7 +773,7 @@ function ChatPage() {
             full += delta;
             setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
           }
-        } catch { /* ignore */ }
+        } catch {}
       };
       
       while (true) {
@@ -793,7 +859,73 @@ function ChatPage() {
     navigate({ to: "/", replace: true });
   };
 
-  // Memoize markdown components to prevent unnecessary re-renders and fix the crash
+  // Safe parsing helper that extracts thinking & dalil blocks cleanly
+  const renderMessageContent = (content: string, isStreamingNow: boolean) => {
+    let thinkingText = "";
+    let cleanText = content;
+
+    const thinkingMatch = /<thinking>([\s\S]*?)(?:<\/thinking>|$)/i.exec(cleanText);
+    if (thinkingMatch) {
+      thinkingText = thinkingMatch[1]!.trim();
+      cleanText = cleanText.replace(/<thinking>[\s\S]*?(?:<\/thinking>|$)/i, "").trim();
+    }
+
+    const dalilBlocks: Array<{ type?: string; source?: string; grade?: string; arabic?: string; bangla?: string; body?: string }> = [];
+    cleanText = cleanText.replace(/<dalil\s*([^>]*)>([\s\S]*?)(?:<\/dalil>|$)/gi, (_m, attrs, body) => {
+      const getAttr = (name: string) => {
+        const match = new RegExp(`${name}=["']([^"']*)["']`, "i").exec(attrs);
+        return match ? match[1] : undefined;
+      };
+      dalilBlocks.push({
+        type: getAttr("type") || "hadith",
+        grade: getAttr("grade"),
+        source: getAttr("source"),
+        arabic: getAttr("arabic"),
+        bangla: getAttr("bangla"),
+        body: body.trim(),
+      });
+      return `\n\n__DALIL_BLOCK_${dalilBlocks.length - 1}__\n\n`;
+    });
+
+    const { body, followups } = splitFollowups(stripEmoji(cleanText));
+    const parts = body.split(/__DALIL_BLOCK_(\d+)__/g);
+
+    return (
+      <div className="space-y-2">
+        {thinkingText && <ThinkingAccordion content={thinkingText} isStreaming={isStreamingNow && !cleanText} />}
+        {parts.map((part, idx) => {
+          if (idx % 2 === 1) {
+            const dalil = dalilBlocks[Number(part)];
+            return dalil ? <DalilCard key={idx} {...dalil} /> : null;
+          }
+          if (!part.trim()) return null;
+          return <ReactMarkdown key={idx} remarkPlugins={[remarkGfm]} urlTransform={urlT} components={mdComponents}>{part}</ReactMarkdown>;
+        })}
+        {!isStreamingNow && followups.length > 0 && (
+          <div className="not-prose mt-6 flex flex-col gap-2">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">সম্পর্কিত গুরুত্বপূর্ণ প্রশ্ন</span>
+            {followups.map((f) => (
+              <button 
+                key={f} 
+                onClick={() => {
+                  setInput(f);
+                  if (textareaRef.current) {
+                    textareaRef.current.value = f;
+                    handleInputResize({ target: textareaRef.current } as any);
+                    textareaRef.current.focus();
+                  }
+                }} 
+                className="rounded-xl border border-primary/20 bg-background px-4 py-2.5 text-left text-sm text-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-sm"
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const mdComponents = useMemo(() => {
     return {
       code({ node, inline, className, children, ...rest }: any) {
@@ -836,7 +968,6 @@ function ChatPage() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Drag & Drop Overlay */}
       {isDragging && (
         <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center border-4 border-dashed border-primary/50 m-4 rounded-3xl animate-in fade-in duration-200 pointer-events-none">
           <div className="bg-card p-8 rounded-full shadow-2xl mb-6 animate-bounce">
@@ -847,10 +978,8 @@ function ChatPage() {
         </div>
       )}
 
-      {/* Lightbox */}
       {lightboxImage && <ImageLightbox src={lightboxImage} onClose={() => setLightboxImage(null)} />}
 
-      {/* Sidebar */}
       <aside className={`${sidebar ? "flex" : "hidden"} fixed inset-y-0 left-0 z-30 w-72 max-w-[85vw] flex-col overflow-y-auto border-r border-border/50 bg-card/50 backdrop-blur-xl md:static md:flex transition-all duration-300 ease-in-out shadow-2xl md:shadow-none`}>
         <div className="flex items-center gap-3 p-5 border-b border-border/50">
           <Logo size={36} />
@@ -942,17 +1071,13 @@ function ChatPage() {
 
       {sidebar && <div className="fixed inset-0 z-20 bg-black/40 backdrop-blur-sm md:hidden transition-opacity" onClick={() => setSidebar(false)} />}
       
-      {/* Main Chat Area */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background/95 relative">
-        
-        {/* Offline Banner */}
         {isOffline && (
           <div className="bg-destructive/90 text-destructive-foreground px-4 py-2 text-sm flex items-center justify-center gap-2 z-50">
             <WifiOff size={16} /> ইন্টারনেট সংযোগ বিচ্ছিন্ন। কিছু ফিচার কাজ নাও করতে পারে।
           </div>
         )}
 
-        {/* Header */}
         <header className="flex min-w-0 items-center justify-between gap-2 bg-background/80 backdrop-blur-md px-4 py-3 border-b border-border/40 z-10 sticky top-0">
           <div className="flex items-center gap-3">
             <button className="md:hidden p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors" onClick={() => setSidebar(!sidebar)}><Menu size={20} /></button>
@@ -1001,7 +1126,6 @@ function ChatPage() {
           </div>
         </header> 
         
-        {/* Chat Messages Area */}
         <div 
           ref={scrollContainerRef}
           onScroll={handleScroll}
@@ -1076,35 +1200,11 @@ function ChatPage() {
                     ) : (
                       <>
                         {i === msgs.length - 1 && flow && <WorkflowStepper stages={flow.stages} current={flow.current} />}
-                        {m.content ? (() => {
-                          const { body, followups } = splitFollowups(stripEmoji(m.content));
-                          return (
-                          <>
-                            <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={mdComponents}>{body}</ReactMarkdown>
-                            
-                            {!loading && followups.length > 0 && i === msgs.length - 1 && (
-                              <div className="not-prose mt-6 flex flex-col gap-2">
-                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">সম্পর্কিত প্রশ্ন</span>
-                                {followups.map((f) => (
-                                  <button key={f} onClick={() => {
-                                    setInput(f);
-                                    if (textareaRef.current) {
-                                      textareaRef.current.value = f;
-                                      handleInputResize({ target: textareaRef.current } as any);
-                                      textareaRef.current.focus();
-                                    }
-                                  }} className="rounded-xl border border-primary/20 bg-background px-4 py-2.5 text-left text-sm text-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-sm">{f}</button>
-                                ))}
-                              </div>
-                            )}
-                          </>
-                          );
-                        })() : null}
+                        {m.content ? renderMessageContent(m.content, loading && i === msgs.length - 1) : null}
                       </>
                     )}
                   </div>
 
-                  {/* Action Buttons below message */}
                   {!loading && (
                     <div className={`mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                       {m.role === "user" ? (
@@ -1140,6 +1240,9 @@ function ChatPage() {
                           <button onClick={() => toggleBookmark(stripEmoji(m.content))} className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${bookmarks.some((b) => b.content === stripEmoji(m.content)) ? "text-primary bg-primary/5" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
                             {bookmarks.some((b) => b.content === stripEmoji(m.content)) ? <BookmarkCheck size={14} /> : <BookmarkIcon size={14} />}
                           </button>
+                          <button onClick={() => exportAnswer(stripEmoji(m.content), "pdf")} className="text-xs text-muted-foreground hover:text-primary px-1">PDF</button>
+                          <button onClick={() => exportAnswer(stripEmoji(m.content), "doc")} className="text-xs text-muted-foreground hover:text-primary px-1">Word</button>
+                          <button onClick={() => downloadShareCard(stripEmoji(m.content))} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary px-1"><Share2 size={13} /> কার্ড</button>
                         </>
                       )}
                     </div>
@@ -1151,11 +1254,10 @@ function ChatPage() {
           </div>
         </div>
 
-        {/* Floating Scroll to Bottom Button */}
         {showScrollButton && (
           <button 
             onClick={scrollToBottom}
-            className="absolute bottom-32 right-8 z-20 p-2 rounded-full bg-background border border-border shadow-lg text-foreground hover:bg-muted transition-all animate-in fade-in zoom-in"
+            className="absolute bottom-32 right-8 z-20 p-2.5 rounded-full bg-background border border-border shadow-xl text-foreground hover:bg-muted transition-all animate-in fade-in zoom-in"
             aria-label="নিচে যান"
           >
             <ChevronDown size={20} />
@@ -1164,15 +1266,13 @@ function ChatPage() {
 
         {callOpen && <VoiceCallDialog messages={msgs.filter(message => !message.error)} onClose={() => setCallOpen(false)} />}
         
-        {/* Input Area */}
         <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border/40 px-3 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-4 z-10 relative">
           
-          {/* Floating Stop Button */}
           {loading && (
             <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-20">
               <button 
                 onClick={() => abortRef.current?.abort()} 
-                className="flex items-center gap-2 bg-background border border-border shadow-md rounded-full px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors animate-in slide-in-from-bottom-2"
+                className="flex items-center gap-2 bg-background border border-border shadow-lg rounded-full px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-all animate-in slide-in-from-bottom-2 hover:scale-105"
               >
                 <Square size={14} className="fill-current text-destructive" /> জেনারেট থামান
               </button>
@@ -1180,8 +1280,6 @@ function ChatPage() {
           )}
 
           <div className="mx-auto w-full max-w-4xl">
-            
-            {/* Previews (Images/Docs) */}
             {(doc || docBusy || images.length > 0) && (
               <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
                 {images.map((src, idx) => (
@@ -1208,14 +1306,10 @@ function ChatPage() {
               </div>
             )}
 
-            {/* Main Input Box */}
             <div className={`relative flex items-end gap-2 rounded-2xl border bg-background p-2 transition-all duration-200 shadow-sm ${loading ? "border-border" : "border-border/80 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 focus-within:shadow-md"}`}>
-              
-              {/* Hidden Inputs */}
               <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files) pickImages(e.target.files); e.target.value = ""; }} />
               <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickDoc(f); e.target.value = ""; }} />
               
-              {/* Plus Menu */}
               <Popover open={plusOpen} onOpenChange={setPlusOpen}>
                 <PopoverTrigger asChild>
                   <button className={`shrink-0 rounded-xl p-2.5 transition-colors ${listening ? "animate-pulse bg-destructive/10 text-destructive" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`} aria-label="আরও অপশন">
@@ -1245,7 +1339,6 @@ function ChatPage() {
               
               {camOpen && <LiveCamera onClose={() => setCamOpen(false)} onCapture={(url) => { setImages((prev) => (prev.length < 5 ? [...prev, url] : prev)); if (!input.trim()) setInput("ক্যামেরায় কী দেখা যাচ্ছে, বিশ্লেষণ করুন।"); }} />}
               
-              {/* Auto-resizing Textarea */}
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -1263,29 +1356,18 @@ function ChatPage() {
                 style={{ overflowY: input.split('\n').length > 8 ? 'auto' : 'hidden' }}
               />
               
-              {/* Send / Stop Button */}
-              {loading ? (
-                <button 
-                  onClick={() => abortRef.current?.abort()} 
-                  className="shrink-0 rounded-xl bg-destructive/10 text-destructive p-3 hover:bg-destructive hover:text-destructive-foreground transition-colors flex items-center justify-center" 
-                  title="থামান"
-                >
-                  <Square size={20} className="fill-current" />
-                </button>
-              ) : (
-                <button 
-                  onClick={() => send()} 
-                  disabled={callOpen || (!input.trim() && !images.length && !doc) || docBusy} 
-                  className="shrink-0 rounded-xl bg-primary p-3 text-primary-foreground shadow-sm transition-all disabled:opacity-50 disabled:shadow-none hover:bg-primary/90 hover:shadow-md active:scale-95 flex items-center justify-center" 
-                  aria-label="পাঠান"
-                >
-                  <Send size={20} className={input.trim() || images.length || doc ? "translate-x-0.5 -translate-y-0.5 transition-transform" : ""} />
-                </button>
-              )}
+              <button 
+                onClick={() => send()} 
+                disabled={callOpen || (!input.trim() && !images.length && !doc) || docBusy || loading} 
+                className="shrink-0 rounded-xl bg-primary p-3 text-primary-foreground shadow-sm transition-all disabled:opacity-50 disabled:shadow-none hover:bg-primary/90 hover:shadow-md active:scale-95 flex items-center justify-center" 
+                aria-label="পাঠান"
+              >
+                <Send size={20} className={input.trim() || images.length || doc ? "translate-x-0.5 -translate-y-0.5 transition-transform" : ""} />
+              </button>
             </div>
             
             <div className="mt-2 text-center text-[11px] text-muted-foreground/60">
-              আল আহসান এআই ভুল করতে পারে। গুরুত্বপূর্ণ তথ্য যাচাই করে নিন।
+              আল আহসান এআই ভুল করতে পারে। ফিকহি ও জরুরি সিদ্ধান্ত বিজ্ঞ আলেমদের মাধ্যমে নিশ্চিত করে নিন।
             </div>
           </div>
         </div>   
