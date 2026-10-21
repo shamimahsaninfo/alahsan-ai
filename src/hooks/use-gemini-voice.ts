@@ -6,9 +6,8 @@ import { geminiLiveConfig } from "@/lib/gemini-live-config";
 import { encodePcm, decodePcm } from "@/lib/pcm-audio";
 import { voiceError } from "@/lib/service-errors";
 import type { LiveEvent } from "./use-live-voice";
-import { recentVoiceContext, voiceOpening, type VoiceContextMessage } from "@/lib/voice-context";
 
-export function useGeminiVoice({ onEvent, messages = [] }: { onEvent: (event: LiveEvent) => void; messages?: VoiceContextMessage[] }) {
+export function useGeminiVoice({ onEvent }: { onEvent: (event: LiveEvent) => void }) {
   const mint = useServerFn(createGeminiLiveToken);
   const latest = useRef(onEvent);
   const [status, setStatus] = useState<"idle" | "connecting" | "connected" | "stopping" | "closed">("idle");
@@ -66,8 +65,7 @@ export function useGeminiVoice({ onEvent, messages = [] }: { onEvent: (event: Li
       const media = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       if (!valid()) { media.getTracks().forEach(t => t.stop()); return; }
       stream.current = media;
-      const history = recentVoiceContext(messages);
-      const token = await mint({ data: { messages: history } });
+      const token = await mint();
       if (!valid()) return;
       const ai = new GoogleGenAI({ apiKey: token.token, httpOptions: { apiVersion: "v1alpha" } });
       const receive = (message: LiveServerMessage) => {
@@ -78,7 +76,6 @@ export function useGeminiVoice({ onEvent, messages = [] }: { onEvent: (event: Li
         const output = content?.outputTranscription?.text;
         if (input) latest.current({ type: "session.input_transcript.delta", delta: input });
         if (output) latest.current({ type: "session.output_transcript.delta", delta: output });
-        if (content?.turnComplete) latest.current({ type: "app.turn.complete" });
         for (const part of content?.modelTurn?.parts ?? []) {
           if (!part.inlineData?.data || content?.interrupted) continue;
           const pcm = decodePcm(part.inlineData.data);
@@ -113,9 +110,9 @@ export function useGeminiVoice({ onEvent, messages = [] }: { onEvent: (event: Li
       };
       media.getTracks().forEach(track => track.addEventListener("ended", stop));
       setStatus("connected");
-      connection.sendClientContent({ turns: [{ role: "user", parts: [{ text: voiceOpening(history) }] }], turnComplete: true });
+      connection.sendClientContent({ turns: [{ role: "user", parts: [{ text: "আসসালামু আলাইকুম।" }] }], turnComplete: true });
     } catch (failure) { if (valid()) { setError(voiceError(failure)); stop(); } }
-  }, [clearPlayback, mint, stop, messages]);
+  }, [clearPlayback, mint, stop]);
   const setMuted = (value: boolean) => { mutedRef.current = value; updateMuted(value); stream.current?.getAudioTracks().forEach(t => { t.enabled = !value; }); if (value) session.current?.sendRealtimeInput({ audioStreamEnd: true }); };
   return { status, error, muted, playbackBlocked, audioRef, start, stop, setMuted, resumePlayback, finalized: true };
 }
