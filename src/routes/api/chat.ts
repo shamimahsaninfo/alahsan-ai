@@ -409,17 +409,17 @@ async function handleChat(request: Request): Promise<Response> {
           });
         }
 
-        // Live web search for online/current questions
-        if (needsSearch(lastUser)) {
+               // Live web search for online/current questions
+        const userCleanText = lastUser.replace(/^\[নির্দেশ:[\s\S]*?\]\s*/i, "").replace(/=== সংযুক্ত ফাইল:[\s\S]*$/g, "").trim();
+        if (needsSearch(userCleanText)) {
           stages.push("search");
           const found = await searchP;
-          if (!found) return stageStream(["search"], async () => "অনলাইন অনুসন্ধানে আপনার প্রশ্নের সাম্প্রতিক তথ্য যাচাই করার মতো ফল পাওয়া যায়নি। তাই আজকের খবর, দাম বা ফলাফল অনুমান করে বলছি না। নির্দিষ্ট প্রতিবেদনের লিংক দিলে সেটি পড়ার চেষ্টা করতে পারি।");
-          if (found) stages.push("verify");
-          system += found
-            ? `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: শুধু এই ফলাফলের ভিত্তিতে উত্তর দেবে, উত্তরের শেষে "সূত্র:" শিরোনামে ব্যবহৃত লিংকগুলো তালিকা করবে। ফলাফলে তথ্য না থাকলে স্পষ্ট বলবে যে নিশ্চিত তথ্য পাওয়া যায়নি — অনুমান করবে না।`
-            : "\n\nব্যবহারকারী সাম্প্রতিক তথ্য চেয়েছেন কিন্তু ওয়েব অনুসন্ধান এখন কাজ করেনি। তথ্য পুরোনো হতে পারে তা স্পষ্ট জানাবে, অনুমান করবে না।";
-
+          if (found) {
+            stages.push("verify");
+            system += `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: এই ফলাফল ও তোমার নিজস্ব জ্ঞানভাণ্ডারের সমন্বয়ে উত্তর দাও।`;
+          }
         }
+       
         if (/ওয়েবসাইট|website|ওয়েব সাইট|অ্যাপ|app|landing|পেজ বানা|html/i.test(lastUser)) stages.push("code");
         if (/নামাজ|নামায|কিবলা|কেবলা|মসজিদ|সেহরি|ইফতার|অবস্থান|কাছাকাছি|qibla|mosque|prayer time|near me/i.test(lastUser)) {
           stages.unshift("geo");
