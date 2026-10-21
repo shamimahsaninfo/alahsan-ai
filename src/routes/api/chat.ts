@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { DEFAULT_MODELS, LOVABLE_MODELS, type Provider } from "@/lib/models";
 import { serviceError } from "@/lib/service-errors";
+import { clockContext, directSessionFact, evidencePolicy, parseNewsRss, requiresLiveSearch } from "@/lib/chat-grounding";
 
 const Body = z.object({
   messages: z
@@ -31,7 +32,7 @@ const PERSONA = `## তোমার ব্যক্তিত্ব ও কঠো
 - সালাম নিয়ম (কঠোর): ব্যবহারকারীর সর্বশেষ বার্তায় সরাসরি সালাম (যেমন "আসসালামু আলাইকুম", "সালাম", "Assalamu alaikum") থাকলে কেবল তখনই উত্তরের শুরুতে "ওয়ালাইকুমুস সালাম" বলবে। অন্য সব ক্ষেত্রে (যেমন "কেমন আছেন", "হ্যালো", যেকোনো প্রশ্ন) কখনোই "ওয়ালাইকুম/ওয়ালাইকুমুস সালাম" বা নিজে থেকে সালাম লিখবে না — সরাসরি স্বাভাবিক উত্তর দেবে।
 - প্রাসঙ্গিকতা: শুধু প্রশ্নের উত্তর দেবে। ভূমিকা, তোষামোদ ("চমৎকার প্রশ্ন"), অপ্রাসঙ্গিক মন্তব্য, নিজের প্রশংসা বা অপ্রয়োজনীয় সারাংশ লিখবে না। প্রথম বাক্য থেকেই আসল উত্তর।
 - নির্ভুলতা: তথ্য বানাবে না। নিশ্চিত না হলে "নিশ্চিত নই" বলবে। কোনো সূত্র, লিংক, সংখ্যা বা হাদিস নম্বর কল্পনা করবে না।
-- রোবটের মতো অজুহাত নিষিদ্ধ ("আমি একটি এআই তাই পারি না")। সরাসরি কাজটি করে দেবে।
+- অপ্রয়োজনীয় রোবটের মতো ভূমিকা নয়। যাচাই বা কোনো কাজ সত্যিই করা না গেলে সীমাবদ্ধতা সরাসরি জানাবে।
 - আগের কথোপকথন মনে রেখে প্রসঙ্গ অনুযায়ী উত্তর দেবে; ছোট প্রশ্নে ছোট উত্তর, জটিল কাজে পূর্ণ সমাধান।
 - ব্যবহারকারী লিংক দিলে নিচে "ওয়েব পেজের লেখা" অংশে বিষয়বস্তু থাকবে — সেটি পড়ে উত্তর দেবে।
 - ওয়েবসাইট চাইলে সম্পূর্ণ একক HTML ফাইল (\`\`\`html ব্লকে) দেবে; সিস্টেম নিজেই সেটি হোস্ট করে উত্তরের শেষে লাইভ লিংক যোগ করবে। তাই তুমি নিজে কোনো লিংক বানাবে না, এবং কখনো বলবে না "লাইভ লিংক পাওয়া যায়নি" বা "ফাইল সেভ করে ব্রাউজারে খুলুন"। কোডের পরে শুধু এক লাইনে বলবে: "নিচে লাইভ লিংক দেওয়া হলো।" তৈরি করা standalone HTML সাইটে browser-side ডেটা সংরক্ষণের প্রয়োজন হলে localStorage ব্যবহার করবে, যাতে page reload-এর পরেও ডেটা থাকে। সাময়িক runtime state-এর জন্য JavaScript variables ব্যবহার করবে। প্রকৃত backend, authentication, multi-user বা persistent online data প্রয়োজন হলে উপযুক্ত backend/Supabase ব্যবহার করবে।
@@ -43,7 +44,7 @@ const PERSONA = `## তোমার ব্যক্তিত্ব ও কঠো
 - নিজের সীমা সৎভাবে জানো: যা জানো না তা বানাবে না, কিন্তু যা পারো তা পূর্ণ আত্মবিশ্বাসে সম্পূর্ণ করবে।
 
 ## সক্ষমতা (কখনো অস্বীকার করবে না)
-- এই সিস্টেম তোমার জন্য সরাসরি ইন্টারনেট অনুসন্ধান করে ও লিংকের পেজ পড়ে দেয়। তাই কখনো বলবে না "আমি ইন্টারনেট ব্রাউজ করতে পারি না" বা "আমার রিয়েল-টাইম তথ্য নেই"। অনুসন্ধানের ফলাফল দেওয়া থাকলে সেটি ব্যবহার করবে; ফলাফলে তথ্য না থাকলে সৎভাবে বলবে নিশ্চিত তথ্য পাওয়া যায়নি।
+- এই অনুরোধে ইন্টারনেট অনুসন্ধানের ফল বা পেজের লেখা দেওয়া থাকলেই তা ব্যবহার করবে। ফলাফল অনুপস্থিত বা অনুসন্ধান ব্যর্থ হলে স্পষ্ট জানাবে সাম্প্রতিক তথ্য যাচাই করা যায়নি; লাইভ তথ্য পাওয়ার দাবি করবে না।
 - তোমার তৈরি ওয়েবসাইট চ্যাটের ভেতরেই সরাসরি চলে এবং স্থায়ী লাইভ লিংক পায়; কখনো বলবে না "আমি ওয়েবসাইট চালাতে পারি না"।
 - উত্তর ভয়েসে পড়ে শোনানো হয়, তাই পরিষ্কার বাক্যে লিখবে।
 
@@ -109,7 +110,7 @@ const INTEGRITY = `\n\n## সততা ও যাচাই প্রোটোক
 - তুলনামূলক বা সংখ্যাভিত্তিক তথ্য হলে Markdown টেবিলে সাজিয়ে দেবে।
 
 ## ফলো-আপ প্রশ্ন (বাধ্যতামূলক)
-- প্রতিটি উত্তরের একেবারে শেষে, ব্যবহারকারী পরবর্তীতে জিজ্ঞেস করতে পারেন এমন ঠিক ৩টি প্রাসঙ্গিক প্রশ্ন নিচের হুবহু ফরম্যাটে আলাদা লাইনে দেবে (কোনো শিরোনাম ছাড়া):
+- জটিল বা বিস্তারিত উত্তরের শেষে উপকারী হলে সর্বোচ্চ ৩টি প্রাসঙ্গিক প্রশ্ন নিচের ফরম্যাটে দেবে। ছোট উত্তর, সময়/পরিচয়, সম্ভাষণ বা ব্যর্থ অনুসন্ধানের পরে অপ্রয়োজনীয় প্রশ্ন যোগ করবে না:
 [[প্রশ্ন: প্রথম প্রশ্ন]]
 [[প্রশ্ন: দ্বিতীয় প্রশ্ন]]
 [[প্রশ্ন: তৃতীয় প্রশ্ন]]
@@ -239,6 +240,10 @@ async function handleChat(request: Request): Promise<Response> {
         }
         if (!key) return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান।", { status: 503 });
 
+        // Real clock and selected-model metadata need no paid generation or guesswork.
+        const fact = directSessionFact(lastText, model);
+        if (fact) return stageStream([], async () => fact);
+
         // Merge Prompts properly so BASE_PROMPT is NEVER lost
         let system = PERSONA + "\n\n" + BASE_PROMPT;
         if (s?.system_prompt?.trim()) {
@@ -281,9 +286,7 @@ async function handleChat(request: Request): Promise<Response> {
         system += INTEGRITY;
 
         // Current Bangladesh date/time so the AI always knows "today"
-        const now = new Date();
-        const bdDate = new Intl.DateTimeFormat("bn-BD", { timeZone: "Asia/Dhaka", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(now);
-        system += `\n\n=== বর্তমান সময় (সার্ভার ঘড়ি, নির্ভুল) ===\nএখন বাংলাদেশ সময়: ${bdDate} (ISO ${now.toISOString()})। তারিখ/সময় জিজ্ঞেস করলে এটাই বলবে; কখনো বলবে না যে তোমার ঘড়ি বা ইন্টারনেট নেই। তোমার সরাসরি ওয়েব অনুসন্ধান ও লিংক পড়ার ক্ষমতা আছে।`;
+        system += `\n\n=== বর্তমান সময় ===\n${clockContext()}`;
         system += `\n\n=== চার্ট নির্দেশনা ===\nযখন উত্তরে তুলনামূলক সংখ্যা, পরিসংখ্যান, বছরভিত্তিক পরিবর্তন বা শতাংশ থাকে, তখন একটি চার্ট যুক্ত করবে। ফরম্যাট ঠিক এরকম (\`\`\`chart কোড ব্লকে বৈধ JSON):\n\`\`\`chart\n{"type":"bar","title":"শিরোনাম","data":[{"name":"ক","value":10},{"name":"খ","value":20}]}\n\`\`\`\ntype হতে পারে "bar", "line" বা "pie"। শুধু বাস্তব/যাচাইকৃত সংখ্যা ব্যবহার করবে, কাল্পনিক সংখ্যা নয়।`;
 
         // Per-user long-term memory (database) + recent talk — আগেই সমান্তরালে লোড শুরু হয়েছে
@@ -313,6 +316,7 @@ async function handleChat(request: Request): Promise<Response> {
         if (needsSearch(lastUser)) {
           stages.push("search");
           const found = await searchP;
+          if (!found) return stageStream(["search"], async () => "অনলাইন অনুসন্ধানে আপনার প্রশ্নের সাম্প্রতিক তথ্য যাচাই করার মতো ফল পাওয়া যায়নি। তাই আজকের খবর, দাম বা ফলাফল অনুমান করে বলছি না। নির্দিষ্ট প্রতিবেদনের লিংক দিলে সেটি পড়ার চেষ্টা করতে পারি।");
           if (found) stages.push("verify");
           system += found
             ? `\n\n=== সর্বশেষ ওয়েব অনুসন্ধানের ফলাফল (${new Date().toISOString().slice(0, 10)}) ===\n${found}\n\nনির্দেশ: শুধু এই ফলাফলের ভিত্তিতে উত্তর দেবে, উত্তরের শেষে "সূত্র:" শিরোনামে ব্যবহৃত লিংকগুলো তালিকা করবে। ফলাফলে তথ্য না থাকলে স্পষ্ট বলবে যে নিশ্চিত তথ্য পাওয়া যায়নি — অনুমান করবে না।`
@@ -333,7 +337,7 @@ async function handleChat(request: Request): Promise<Response> {
           model,
           stream: true,
           max_tokens: isQuick ? 4096 : 65536, // সাধারণ প্রশ্নে দ্রুত উত্তর শুরু, ওয়েবসাইট তৈরিতে পূর্ণাঙ্গ সাইট
-          messages: [{ role: "system", content: system }, ...msgs],
+          messages: [{ role: "system", content: `${system}\n\n=== এই অনুরোধের সত্যতা ও আচরণ ===\n${evidencePolicy(model)}` }, ...msgs],
         };
 
         if (provider === "lovable" && model.startsWith("openai/gpt-5.6")) body["reasoning_effort"] = "none";
@@ -367,7 +371,7 @@ async function handleChat(request: Request): Promise<Response> {
           res = await fetch(a.url, {
             method: "POST",
             headers: { Authorization: `Bearer ${a.key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ ...body, model: a.model }),
+            body: JSON.stringify({ ...body, model: a.model, messages: [{ role: "system", content: `${system}\n\n${evidencePolicy(a.model)}` }, ...msgs] }),
             signal: ac.signal,
           }).catch((e) => new Response(String(e?.name === "AbortError" ? "timeout" : e), { status: e?.name === "AbortError" ? 504 : 502 }));
           clearTimeout(timer);
@@ -375,21 +379,8 @@ async function handleChat(request: Request): Promise<Response> {
           const t = (await res.text()).slice(0, 500);
           realErr ??= { status: res.status, text: t };
           console.error(`Key "${a.label}" failed [${res.status}]: ${t.slice(0, 300)}`);
-          if ([402, 429, 502, 503, 504].includes(res.status)) break;
-        }
-
-        if ((!res.ok || !res.body) && ![402, 429, 502, 503, 504].includes(realErr?.status ?? 0) && process.env["LOVABLE_API_KEY"]) {
-          const first = (model.includes("/") ? model : `${provider}/${model}`).replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
-          const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3-flash-preview", "google/gemini-3.1-pro-preview"].filter(Boolean))];
-          for (const gwModel of chain) {
-            const g = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${process.env["LOVABLE_API_KEY"]}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ ...body, model: gwModel }),
-            }).catch(() => null);
-            if (g?.ok && g.body) { res = g; break; }
-            await g?.text().catch(() => "");
-          }
+          // A failed request is terminal here: no credential rotation or silent model substitution.
+          break;
         }
 
         if (!res.ok || !res.body) {
@@ -559,13 +550,7 @@ async function generateImage(prompt: string): Promise<string | null> {
 }
 
 function needsSearch(t: string): boolean {
-  if (/https?:\/\//.test(t)) return false;
-  if (/=== সংযুক্ত ফাইল:/.test(t)) return false;
-  // Location / time-of-day questions are answered from server clock & location guidance, not web search
-  if (/(কোন জায়গায়|কোথায় আছি|আমার অবস্থান|where am i|কয়টা বাজে|কত তারিখ|কি বার|কী বার)/i.test(t)) return false;
-  // ছোট সাধারণ কথায় (হাই, কেমন আছো, এখন কী করছ) সার্চ নয় — শুধু স্পষ্ট লাইভ-তথ্যের প্রশ্নে
-  if (t.trim().length < 12) return false;
-  return /(সর্বশেষ|সাম্প্রতিক|খবর|সংবাদ|দাম কত|বাজার দর|রেট|আবহাওয়া|ফলাফল|স্কোর|নির্বাচন|latest|news|price|weather|score|সার্চ|খুঁজে|অনুসন্ধান|search|আজকের (খবর|দাম|আবহাওয়া|খেলা|রেট))/i.test(t);
+  return requiresLiveSearch(t);
 }
 
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
@@ -603,14 +588,12 @@ async function bingSearch(q: string): Promise<{ url: string; title: string; snip
 }
 
 async function newsRss(q: string): Promise<string> {
-  const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q.slice(0, 150))}&hl=bn&gl=BD&ceid=BD:bn`, { headers: { "User-Agent": BROWSER_UA }, signal: AbortSignal.timeout(8000) }).catch(() => null);
+  const todayOnly = /আজ|today/i.test(q);
+  const query = q.replace(/আজকের|আজকে|খবর বলুন|খবর দাও|কী|কি|\?/g, " ").trim() || "বাংলাদেশ";
+  const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent((query + " when:2d").slice(0, 150))}&hl=bn&gl=BD&ceid=BD:bn`, { headers: { "User-Agent": BROWSER_UA }, signal: AbortSignal.timeout(8000) }).catch(() => null);
   if (!r?.ok) return "";
   const xml = await r.text();
-  const items = xml.split("<item>").slice(1, 9).map((it) => {
-    const g = (t: string) => (new RegExp(`<${t}>([\\s\\S]*?)</${t}>`).exec(it)?.[1] ?? "").replace(/<!\[CDATA\[|\]\]>/g, "").trim();
-    return `- ${g("title")} (${g("pubDate")})\n  ${g("link")}`;
-  });
-  return items.length ? `=== সর্বশেষ সংবাদ শিরোনাম (Google News) ===\n${items.join("\n")}` : "";
+  return parseNewsRss(xml, new Date(), todayOnly);
 }
 
 async function tavilySearch(q: string): Promise<{ url: string; title: string; snip: string }[]> {
@@ -633,15 +616,22 @@ async function tavilySearch(q: string): Promise<{ url: string; title: string; sn
 }
 
 async function webSearch(q: string): Promise<string> {
-  const news = /(খবর|সংবাদ|news|আজকে?র?|today|সর্বশেষ|latest)/i.test(q) ? newsRss(q.replace(/(আজকের|আজকে|কী|কি|\?)/g, " ").trim() || "বাংলাদেশ") : Promise.resolve("");
+  // News headlines are already grounded evidence; don't wait for unrelated HTML scraping.
+  if (/(খবর|সংবাদ|news)/i.test(q)) {
+    const headlines = await newsRss(q);
+    if (headlines) return headlines;
+  }
+  const news = Promise.resolve("");
+  const htmlP = ddgHtml(q);
+  const bingP = bingSearch(q);
   const tavily = await tavilySearch(q);
   if (tavily.length) {
     const n = await news;
     return [n, tavily.map((o, i) => `[${i + 1}] ${o.title}\n${o.url}\n${o.snip}`).join("\n\n")].filter(Boolean).join("\n\n");
   }
-  const html = await ddgHtml(q);
+  const html = await htmlP;
   if (!html) {
-    const b = await bingSearch(q);
+    const b = await bingP;
     const n = await news;
     if (!b.length) return n;
     const top = await readUrls(b.slice(0, 2).map((o) => o.url).join(" ")).catch(() => "");
