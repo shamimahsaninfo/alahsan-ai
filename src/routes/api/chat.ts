@@ -227,8 +227,8 @@ async function handleChat(request: Request): Promise<Response> {
         const googleNoKey = provider === "google" && !keys?.google_key?.trim() && !process.env["GOOGLE_API_KEY"];
         void googleNoKey;
         const isQuick = !picked && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|অংক|গণিত/i.test(lastText);
-        let model = picked ?? (isQuick ? "google/gemini-3-flash-preview" : isSiteReq && /lite/i.test(baseModel)
-          ? (provider === "google" ? "gemini-3-flash-preview" : provider === "lovable" ? "google/gemini-3-flash-preview" : baseModel)
+        let model = picked ?? (isQuick ? "google/gemini-3.8-flash" : isSiteReq && /lite/i.test(baseModel)
+          ? (provider === "google" ? "gemini-3.8-flash" : provider === "lovable" ? "google/gemini-3.8-flash" : baseModel)
           : baseModel);
 
         // API keys
@@ -247,7 +247,7 @@ async function handleChat(request: Request): Promise<Response> {
           url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
           key = ownGoogle;
           // সাধারণ প্রশ্নে flash-lite (মাপা প্রথম টোকেন ~০.৭–০.৯ সে.); কোড/ওয়েবসাইট/জটিল কাজে 3.8-flash
-          model = isQuick ? "gemini-3.5-flash-lite" : "gemini-3.8-flash";
+          model = isQuick ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
         } else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
           url = "https://ai.gateway.lovable.dev/v1/chat/completions";
           key = process.env["LOVABLE_API_KEY"];
@@ -354,9 +354,9 @@ async function handleChat(request: Request): Promise<Response> {
 
         if (provider === "lovable" && model.startsWith("openai/gpt-5.6")) body["reasoning_effort"] = "none";
         if (provider === "lovable" && model === "openai/gpt-6-astra") {
-          // দ্রুত প্রথম সাড়ার জন্য ডিফল্ট low
-          const eff = s?.reasoning_effort ?? "low";
-          body["reasoning_effort"] = ["low", "medium", "high", "xhigh"].includes(eff) ? eff : "low";
+          // দ্রুত প্রথম সাড়ার জন্য ডিফল্ট meium
+          const eff = s?.reasoning_effort ?? "medium";
+          body["reasoning_effort"] = ["low", "medium", "high", "xhigh"].includes(eff) ? eff : "medium";
         }
 
         type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
@@ -429,9 +429,9 @@ function friendlyError(status: number, text: string): string {
   if (billing) return "এআই সেবার অ্যাকাউন্টে ব্যালান্স বা বিলিং সমস্যার কথা জানিয়েছে। অ্যাডমিন প্যানেলে কী-টি যাচাই করুন বা অন্য কী যোগ করুন।";
   if (status === 429 || /rate.?limit|too many requests|resource_exhausted|quota/.test(t))
     return pick([
-      "মনে হচ্ছে এখন এআই সেবায় সাময়িক অনুরোধের চাপ (Rate Limit) হয়েছে। এক মিনিট পর আবার পাঠান।",
-      "এই মুহূর্তে অনুরোধ একটু বেশি হয়ে গেছে, তাই সেবা সাময়িক বিরতি চাইছে। একটু পরে আবার চেষ্টা করুন।",
-      "সাময়িক সীমায় পৌঁছেছে — এটি স্থায়ী কিছু নয়। কিছুক্ষণ পর আবার লিখলেই উত্তর পাবেন।",
+      "মনে হচ্ছে এখন এআই সেবায় সাময়িক অনুরোধের চাপ (Rate Limit) হয়েছে। এক মিনিট পর আবার পাঠান। সাময়িক সমস্যার জন্য দুঃখিত।",
+      "এই মুহূর্তে অনুরোধ একটু বেশি হয়ে গেছে, তাই সেবা সাময়িক বিরতি চাইছে। একটু পরে আবার চেষ্টা করুন সাময়িক সমস্যার জন্য দুঃখিত।",
+      "সাময়িক সীমায় পৌঁছেছে — এটি স্থায়ী কিছু নয়। কিছুক্ষণ পর আবার লিখলেই উত্তর পাবেন সাময়িক সমস্যার জন্য দুঃখিত।",
     ]);
   if (status === 401 || status === 403 || /api key|permission|unauthori[sz]ed|invalid.*key/.test(t))
     return "এআই কী গ্রহণ করা হয়নি (কী ভুল বা অনুমতি নেই)। অ্যাডমিন প্যানেলে কী যাচাই করুন।";
