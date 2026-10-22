@@ -241,14 +241,15 @@ async function handleChat(request: Request): Promise<Response> {
           url = "https://api.openai.com/v1/chat/completions";
           key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
         }
-        // নিজস্ব Google কী থাকলে সরাসরি Google (মাপা প্রথম টোকেন ~২.৮ সে.); বিল্ট-ইন পথ শুধু ব্যাকআপ
+                // নিজস্ব Google কী থাকলে সরাসরি Google
         const ownGoogle = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
         if (ownGoogle && !picked && provider !== "openai") {
           url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
           key = ownGoogle;
-          // সাধারণ প্রশ্নে flash-lite (মাপা প্রথম টোকেন ~০.৭–০.৯ সে.); কোড/ওয়েবসাইট/জটিল কাজে 3.8-flash
-          model = isQuick ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
-        } else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
+          // অ্যাডমিনের নির্বাচিত মডেলটি অগ্রাধিকার পাবে; কোটা শেষ হওয়া 3.8-flash জোর করে বসাবে না
+          model = baseModel || "gemini-3-flash-preview";
+        }
+         else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
           url = "https://ai.gateway.lovable.dev/v1/chat/completions";
           key = process.env["LOVABLE_API_KEY"];
           model = model.includes("/") ? model : provider === "google" ? `google/${model}` : DEFAULT_MODELS.lovable;
@@ -391,10 +392,11 @@ async function handleChat(request: Request): Promise<Response> {
           const t = (await res.text()).slice(0, 500);
           realErr ??= { status: res.status, text: t };
           console.error(`Key "${a.label}" failed [${res.status}]: ${t.slice(0, 300)}`);
-          if ([402, 429, 502, 503, 504].includes(res.status)) break;
+                    // ৪২৯ (কোটা শেষ) বা ৫০২/৫০৩/৫০৪ হলে break না করে পুলের পরের কী দিয়ে চেষ্টা করবে
+          if ([402, 502, 503, 504].includes(res.status) && a.label !== "primary") break;
         }
-
-        if ((!res.ok || !res.body) && ![402, 429, 502, 503, 504].includes(realErr?.status ?? 0) && process.env["LOVABLE_API_KEY"]) {
+                // গুগল বা ওপেনএআই-এর সব কী কোটা শেষ (৪২৯) বা অফলাইন হলেও যাতে চ্যাট উত্তর দেওয়া বন্ধ না করে
+        if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"]) {
           const first = (model.includes("/") ? model : `${provider}/${model}`).replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
           const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3-flash-preview", "google/gemini-3.1-pro-preview"].filter(Boolean))];
           for (const gwModel of chain) {
