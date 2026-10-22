@@ -149,9 +149,7 @@ let cachedKeys: { data: any; time: number } | null = null;
 
 async function getCachedSettingsAndKeys(supabaseAdmin: any) {
   const now = Date.now();
-  const needSettings = !cachedSettings || now - cachedSettings.time > 60_000;
-  const needKeys = !cachedKeys || now - cachedKeys.time > 60_000;
-
+    const needSettings = !cachedSettings || now - cachedSettings.time > 5_000;
   const [sRes, kRes] = await Promise.all([
     needSettings ? supabaseAdmin.from("ai_settings").select("*").eq("id", 1).maybeSingle() : Promise.resolve({ data: cachedSettings!.data }),
     needKeys ? supabaseAdmin.from("ai_keys").select("*").eq("id", 1).maybeSingle() : Promise.resolve({ data: cachedKeys!.data }),
@@ -226,10 +224,9 @@ async function handleChat(request: Request): Promise<Response> {
         // দ্রুত পথ: সাধারণ প্রশ্নে দ্রুততম মডেল (Google কী না থাকলেও বিল্ট-ইন দিয়ে)
         const googleNoKey = provider === "google" && !keys?.google_key?.trim() && !process.env["GOOGLE_API_KEY"];
         void googleNoKey;
-        const isQuick = !picked && !isSiteReq && lastText.length < 600 && !/কোড|code|প্রোগ্রাম|ফতোয়া|মাসআলা|অংক|গণিত/i.test(lastText);
-        let model = picked ?? (isQuick ? "google/gemini-3.8-flash" : isSiteReq && /lite/i.test(baseModel)
-          ? (provider === "google" ? "gemini-3.8-flash" : provider === "lovable" ? "google/gemini-3.8-flash" : baseModel)
-          : baseModel);
+                // অ্যাডমিন প্যানেলে নির্ধারিত মডেলটিই চূড়ান্ত, কোনো স্বয়ংক্রিয় ৩.৮-ফ্ল্যাশ ওভাররাইড হবে না
+        let model = picked ?? baseModel;
+  
 
         // API keys
         let url = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -242,12 +239,11 @@ async function handleChat(request: Request): Promise<Response> {
           key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
         }
                 // নিজস্ব Google কী থাকলে সরাসরি Google
-        const ownGoogle = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
+                const ownGoogle = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
         if (ownGoogle && !picked && provider !== "openai") {
           url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
           key = ownGoogle;
-          // অ্যাডমিনের নির্বাচিত মডেলটি অগ্রাধিকার পাবে; কোটা শেষ হওয়া 3.8-flash জোর করে বসাবে না
-          model = baseModel || "gemini-3-flash-preview";
+          model = (baseModel || "gemini-3-flash-preview").replace(/^google\//, "");
         }
          else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
           url = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -353,11 +349,12 @@ async function handleChat(request: Request): Promise<Response> {
           messages: [{ role: "system", content: system }, ...msgs],
         };
 
-        if (provider === "lovable" && model.startsWith("openai/gpt-5.6")) body["reasoning_effort"] = "none";
-        if (provider === "lovable" && model === "openai/gpt-6-astra") {
-          // দ্রুত প্রথম সাড়ার জন্য ডিফল্ট meium
-          const eff = s?.reasoning_effort ?? "medium";
-          body["reasoning_effort"] = ["low", "medium", "high", "xhigh"].includes(eff) ? eff : "medium";
+                // অ্যাডমিন প্যানেল থেকে চিন্তার গতি (Thinking Speed / Reasoning Effort) কার্যকর
+        const eff = s?.reasoning_effort || "low";
+        if (eff === "none") {
+          body["reasoning_effort"] = "none";
+        } else if (["low", "medium", "high", "xhigh"].includes(eff)) {
+          body["reasoning_effort"] = eff === "xhigh" && provider === "google" ? "high" : eff;
         }
 
         type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
