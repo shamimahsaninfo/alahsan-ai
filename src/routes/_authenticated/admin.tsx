@@ -143,14 +143,14 @@ function AdminPage() {
           </select>
           <label className="mt-2 block text-xs text-muted-foreground">অথবা নিজে মডেলের নাম লিখুন</label>
           <input value={s.model} onChange={(e) => set("model", e.target.value)} className={`${input} mt-1 text-sm`} />
-          <label className="mt-4 block text-sm text-muted-foreground">চিন্তার গভীরতা (বিল্ট-ইন GPT-6 Astra)</label>
+                    <label className="mt-4 block text-sm text-muted-foreground">চিন্তার গতি ও গভীরতা (Thinking Speed & Reasoning)</label>
           <select value={s.reasoning_effort} onChange={(e) => set("reasoning_effort", e.target.value)} className={`${input} mt-1`}>
-            <option value="low">কম — দ্রুত উত্তর</option>
-            <option value="medium">মাঝারি — ভারসাম্য</option>
-            <option value="high">বেশি — গভীর চিন্তা</option>
-            <option value="xhigh">সর্বোচ্চ — সবচেয়ে বুদ্ধিমান (ধীর)</option>
+            <option value="none">অতি দ্রুত / তাত্ক্ষণিক (চিন্তা ছাড়া সরাসরি উত্তর)</option>
+            <option value="low">কম চিন্তা — দ্রুত উত্তর</option>
+            <option value="medium">মাঝারি — ভারসাম্যপূর্ণ গতি ও চিন্তা</option>
+            <option value="high">গভীর চিন্তা — বিশ্লেষণধর্মী (ধীর)</option>
+            <option value="xhigh">সর্বোচ্চ চিন্তা — জটিল গবেষণা ও কোডিং</option>
           </select>
-        </section>
 
         <section className={card}>
           <div className="flex items-center justify-between">
