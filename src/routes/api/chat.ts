@@ -146,10 +146,10 @@ export const Route = createFileRoute("/api/chat")({
 // সার্ভার মেমোরি ক্যাশ (৬০ সেকেন্ডের জন্য ai_settings ও ai_keys সংরক্ষণ)
 let cachedSettings: { data: any; time: number } | null = null;
 let cachedKeys: { data: any; time: number } | null = null;
-
 async function getCachedSettingsAndKeys(supabaseAdmin: any) {
   const now = Date.now();
-    const needSettings = !cachedSettings || now - cachedSettings.time > 5_000;
+  const needSettings = !cachedSettings || now - cachedSettings.time > 5_000;
+  const needKeys = !cachedKeys || now - cachedKeys.time > 5_000;
   const [sRes, kRes] = await Promise.all([
     needSettings ? supabaseAdmin.from("ai_settings").select("*").eq("id", 1).maybeSingle() : Promise.resolve({ data: cachedSettings!.data }),
     needKeys ? supabaseAdmin.from("ai_keys").select("*").eq("id", 1).maybeSingle() : Promise.resolve({ data: cachedKeys!.data }),
@@ -345,7 +345,8 @@ async function handleChat(request: Request): Promise<Response> {
                 const body: Record<string, unknown> = {
           model,
           stream: true,
-          max_tokens: isQuick ? 4096 : 65536, // সাধারণ প্রশ্নে দ্রুত উত্তর শুরু, ওয়েবসাইট তৈরিতে পূর্ণাঙ্গ সাইট
+          max_tokens: 65536,
+                  // সাধারণ প্রশ্নে দ্রুত উত্তর শুরু, ওয়েবসাইট তৈরিতে পূর্ণাঙ্গ সাইট
           messages: [{ role: "system", content: system }, ...msgs],
         };
 
@@ -377,7 +378,7 @@ async function handleChat(request: Request): Promise<Response> {
           if (hasImage && a.label !== "primary" && !a.url.includes("generativelanguage.googleapis.com") && !a.url.includes("openai.com")) continue;
           // শুধু সংযোগ/প্রথম সাড়ার জন্য সময়সীমা; স্ট্রিম শুরু হলে আর কাটবে না
           const ac = new AbortController();
-          const timer = setTimeout(() => ac.abort(), isQuick && !a.url.includes("generativelanguage") ? 10000 : a.url.includes("generativelanguage") ? 15000 : attempts.length > 1 ? 20000 : 45000);
+          const timer = setTimeout(() => ac.abort(), a.url.includes("generativelanguage") ? 15000 : attempts.length > 1 ? 20000 : 45000);
           res = await fetch(a.url, {
             method: "POST",
             headers: { Authorization: `Bearer ${a.key}`, "Content-Type": "application/json" },
