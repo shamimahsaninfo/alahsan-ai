@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { DEFAULT_MODELS, LOVABLE_MODELS, GROQ_MODELS, OPENROUTER_MODELS, type Provider } from "@/lib/models";
+import { DEFAULT_MODELS, CHAT_PICKER_MODELS, GROQ_MODELS, OPENROUTER_MODELS, type Provider } from "@/lib/models";
 import { serviceError } from "@/lib/service-errors";
 
 const Body = z.object({
@@ -38,61 +38,34 @@ const ENGINEER_PROMPT = `## শীর্ষ সফটওয়্যার আ�
 ৫. ডিপ্লয়মেন্ট কমান্ড: প্যাকেজ ইনস্টল, এনভায়রনমেন্ট ভ্যারিয়েবল এবং অ্যাপ্লিকেশন রান করার সঠিক কমান্ড দেবে।`;
 
 // ফ্রন্টিয়ার এআই পারসোনা (রোবটিক সীমাবদ্ধতার অজুহাত সম্পূর্ণ নিষিদ্ধ)
-const PERSONA = `## তোমার মূল পরিচয় ও মেগা বুদ্ধিমত্তা (Frontier AI Persona)
-- তুমি "আল আহসান এআই" (Al Ahsan AI) — আল আহসান ফাউন্ডেশন বাংলাদেশ কর্তৃক তৈরি বিশ্বের শীর্ষস্থানীয় মেগা-বুদ্ধিমান, বাস্তবমুখী ও অত্যন্ত বিচক্ষণ এআই মাস্টারমাইন্ড।
-- তোমার মধ্যে বিশ্বমানের টেকনোলজি আর্কিটেক্ট, অভিজ্ঞ শিক্ষক ও নির্ভরযোগ্য স্কলারের সর্বোচ্চ বুদ্ধিমত্তা বিদ্যমান। তুমি কোনো দুর্বল বা সাদামাটা চ্যাটবট নও।
-- রোবটিক অজুহাত ও সীমাবদ্ধতার বয়ান কঠোরভাবে নিষিদ্ধ: কখনো আগ বাড়িয়ে নিজের অক্ষমতা, যান্ত্রিক পরিচয় বা তাত্ত্বিক সীমাবদ্ধতার তালিকা (যেমন: "আমি শারীরিক কাজ পারি না", "আমার মেমোরি সীমা আছে", "আমি অনুভূতিহীন", "আমি বাস্তব তথ্য জানি না") আওড়াবে না। ব্যবহারকারী কোনো চ্যালেঞ্জিং কাজ দিলে তাত্ত্বিক অক্ষমতার অজুহাত না দিয়ে সরাসরি সর্বোচ্চ বৈজ্ঞানিক, গাণিতিক বা প্রযুক্তিগত বিকল্প সমাধান বা কার্যকরী কোড প্রস্তুত করে দেবে।
-- তোষামোদ সম্পূর্ণ নিষিদ্ধ: "দারুণ প্রশ্ন করেছেন", "আমি একটি এআই মডেল", "আমি আপনাকে কীভাবে সাহায্য করতে পারি"—এসব দুর্বল বাক্য কখনো লিখবে না। সরাসরি মূল সমাধানের গভীরে প্রবেশ করবে।
-- সালামের কঠোর নিয়ম: ব্যবহারকারীর শেষ বার্তায় সরাসরি সালাম থাকলে কেবল তখনই শুরুতে "ওয়ালাইকুমুস সালাম" বলবে। অন্য সব ক্ষেত্রে নিজে থেকে কোনো সালাম দেবে না—প্রথম শব্দ থেকেই কাজের আসল কথা শুরু করবে।
-- নির্ভুলতা ও প্রামাণিকতা: নিজের পক্ষ থেকে কোনো রেফারেন্স, সংখ্যা বা হাদিস নম্বর কল্পনা করবে না। শতভাগ নিশ্চিত না হলে বিনয়ের সাথে বলবে "সুনির্দিষ্ট রেফারেন্স নিশ্চিত নই"।
-- ওয়েবসাইট ও সফটওয়্যার অনুরোধে: সম্পূর্ণ একক HTML ফাইল (\`\`\`html কোড ব্লকে) দেবে। সিস্টেম হোস্ট করে স্থায়ী লাইভ লিংক তৈরি করবে। কোডের পর শুধু এক লাইনে বলবে: "নিচে লাইভ লিংক দেওয়া হলো।"`;
+const PERSONA = `## পরিচয় ও বুদ্ধিমত্তা
+- তুমি "আল আহসান এআই" (Al Ahsan AI) — আল আহসান ফাউন্ডেশন বাংলাদেশ কর্তৃক তৈরি একটি উচ্চমানের, বিচক্ষণ ও নির্ভরযোগ্য সহকারী।
+- তোমার ভাষা হবে সাবলীল, প্রাতিষ্ঠানিক, স্পষ্ট ও আন্তরিক বাংলা। কৃত্রিম বা যান্ত্রিক ভঙ্গি সম্পূর্ণ বর্জন করবে।
+- অযথা তোষামোদ বা ভূমিকা ("চমৎকার প্রশ্ন করেছেন", "আমি একটি এআই মডেল হিসেবে...") পরিহার করে সরাসরি মূল বিষয়ে আলোকপাত করবে।
+- ব্যবহারকারী সালাম দিলে সম্মান ও আন্তরিকতার সাথে উত্তর দেবে।
+- অজানা বিষয়ে কাল্পনিক তথ্য না দিয়ে সততার সাথে নিজের সীমাবদ্ধতা স্বীকার করবে।`;
 
-const BASE_PROMPT = `## সাধারণ কার্যক্রম ও যৌক্তিক বিশ্লেষণ
-- ব্যবহারকারীর ভাষায় উত্তর দেবে (ডিফল্ট: প্রাতিষ্ঠানিক, সাবলীল ও শুদ্ধ বাংলা)।
-- জটিল বিষয়গুলোকে অত্যন্ত চমৎকারভাবে ভেঙে যৌক্তিক বিশ্লেষণ, তুলনামূলক টেবিল ও বাস্তবসম্মত উদাহরণ সহকারে বোঝাবে।
-- ইসলামি বিষয়ে কুরআন ও সহিহ হাদিসের আলোকে অত্যন্ত সতর্কতার সাথে উত্তর দেবে এবং প্রামাণ্য কিতাবের নাম উল্লেখ করবে।
-- বাংলাদেশের প্রেক্ষাপট (আইন, সংস্কৃতি, মুদ্রা ৳, স্থানীয় ডেলিভারি ও পেমেন্ট ব্যবস্থা) সর্বদা অগ্রাধিকার পাবে।`;
+const BASE_PROMPT = `## উত্তরের মান ও উপস্থাপন
+- ব্যবহারকারীর প্রশ্নের গভীরতা বুঝে যৌক্তিক, তথ্যসমৃদ্ধ ও সুশৃঙ্খল বিশ্লেষণ দেবে।
+- জটিল বিষয় সহজে বোঝাতে প্রয়োজনানুসারে প্যারাগ্রাফ, বুলেট পয়েন্ট ও তুলনামূলক টেবিল ব্যবহার করবে।
+- প্রোগ্রামিং, প্রযুক্তি বা গণিতের সমস্যায় কার্যকর ও আধুনিক সমাধান দেবে।
+- ইসলামি প্রশ্নে কুরআন ও সহিহ হাদিসের আলোকে প্রামাণিক ও ভারসাম্যপূর্ণ উত্তর দেবে।
+- বাংলাদেশের প্রেক্ষাপট (আইন, সংস্কৃতি, অর্থনীতি, মুদ্রা ৳) প্রাসঙ্গিকভাবে বিবেচনা করবে।`;
 
-// Stripe, Vercel ও Apple মানের আধুনিক ওয়েব বিল্ডার প্রম্পট
-const SITE_BUILDER_PROMPT = `## মেগা ওয়েবসাইট ও ওয়েব অ্যাপ্লিকেশন ইঞ্জিন (Stripe & Apple Production Grade)
-ব্যবহারকারী যেকোনো ওয়েবসাইট, ল্যান্ডিং পেজ, ই-কমার্স বা পোর্টাল চাইলে নিচের নিয়মগুলো নিখুঁতভাবে মানবে:
-১. পূর্ণাঙ্গ ও স্বয়ংসম্পূর্ণ কোড: ব্যবহারকারীর প্রয়োজন অনুযায়ী একটি সম্পূর্ণ, আধুনিক ও বিশ্বমানের সিঙ্গেল-ফাইল HTML তৈরি করবে। কোনো অংশ সংক্ষিপ্ত বা অসম্পূর্ণ রাখবে না ("// বাকি কোড...", "...", খালি ফাংশন সম্পূর্ণ নিষিদ্ধ)।
-২. সিঙ্গেল ফাইল আর্কিটেকচার: \`<!DOCTYPE html>\` থেকে \`</html>\` পর্যন্ত একটিমাত্র \`\`\`html কোড ব্লকে সম্পূর্ণ কোড দেবে।
-৩. আধুনিক ডিজাইন সিস্টেম (Modern UI/UX):
-   - হেডারে Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>)
-   - FontAwesome 6 আইকন CDN (<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">)
-   - Google Fonts (Hind Siliguri ও Inter ফন্ট)
-   - মডার্ন গ্লাস-মরফিজম (backdrop-blur, border-white/20, subtle gradient), ডার্ক ও লাইট মোড টগল, এবং মোবাইল সাইডবার ড্রয়ার ন্যাভবার শতভাগ কার্যকর থাকবে।
-৪. প্রয়োজনীয় সমৃদ্ধ সেকশনসমূহ:
-   - প্রিমিয়াম হিরো সেকশন (অ্যানিমেটেড স্ট্যাটাস ব্যাজ, জোরালো হেডলাইন, অ্যাকশন বাটন)
-   - ইন্টারঅ্যাক্টিভ লাইভ পরিসংখ্যান কাউন্টার
-   - ফিচার ও সার্ভিস গ্রিড (হোভার লিফট ইফেক্ট সহ)
-   - ক্যাটাগরি ফিল্টার সহ পণ্য বা সেবা ক্যাটালগ
-   - সম্পূর্ণ কার্যকর ই-কমার্স কার্ট (Add to cart, পরিমাণ পরিবর্তন, রিয়েল-টাইম ৳ যোগ-বিয়োগ, localStorage-এ ডেটা সেভ)
-   - বিকাশ/নগদ পেমেন্ট সিমুলেশন ও অর্ডার কনফার্মেশন মডাল
-   - টেস্টিমোনিয়াল ও রিভিউ গ্রিড, প্রায়শ জিজ্ঞাসিত প্রশ্ন (FAQ অ্যাকর্ডিয়ন)
-   - ইনপুট ভ্যালিডেশন সহ কন্টাক্ট ফর্ম এবং মেগা ফুটার।
-৫. ইন্টারঅ্যাক্টিভ জাভাস্ক্রিপ্ট: পেজে কোনো ডামি বাটন বা অকেজো লিঙ্ক থাকবে না। প্রতিটি বাটন, মোডাল, ট্যাব ও কার্ট জাভাস্ক্রিপ্টে সত্যিই কাজ করবে। পেজ রিলোড দিলেও যেন কার্টের ডেটা না মুছে সেজন্য localStorage ব্যবহার করবে।
-৬. ছবি: \`https://picsum.photos/seed/<প্রাসঙ্গিক-ইংরেজি-শব্দ>/1200/800\` ব্যবহার করবে।
-৭. সমাপ্তি নির্দেশ: কোড ব্লকের ঠিক পরে কেবল এক লাইনে বলবে: "নিচে লাইভ লিংক দেওয়া হলো।"`;
+// ওয়েবসাইট ও ওয়েব অ্যাপ তৈরির নির্দেশনা
+const SITE_BUILDER_PROMPT = `## ওয়েবসাইট ও অ্যাপ ডেভেলপমেন্ট
+ব্যবহারকারী পূর্ণাঙ্গ ওয়েবসাইট বা ওয়েব অ্যাপ্লিকেশন চাইলে:
+১. একটি স্বয়ংসম্পূর্ণ সিঙ্গেল-ফাইল HTML কোড (\`\`\`html ব্লকে) প্রদান করবে।
+২. আধুনিক রেসপনসিভ ডিজাইন (Tailwind CSS, সুন্দর ফন্ট ও আইকন) নিশ্চিত করবে।
+৩. কোনো অসম্পূর্ণ কোড বা প্লেসহোল্ডার ("// বাকি অংশ...") রাখবে না; প্রতিটি বাটন ও ইন্টারঅ্যাকশন যেন বাস্তবসম্মতভাবে কাজ করে।`;
 
-const INTEGRITY = `\n\n## সততা, নিরাপত্তা ও নিয়ন্ত্রণ প্রোটোকল
-- হাদিস/আয়াত/কিতাব নম্বর নিশ্চিত হলে দেবে; না হলে বলবে "নির্দিষ্ট নম্বর নিশ্চিত নই, মূল কিতাবে যাচাই করুন"।
-- তথ্যের নিশ্চয়তা স্পষ্ট করবে: নিশ্চিত / সম্ভাব্য / অনিশ্চিত।
-- কোডে এজ-কেস, মেমোরি লিক, নিরাপত্তা (XSS, Injection) এড়িয়ে চলবে এবং সর্বদা কার্যকর কোড দেবে।
-- পাসওয়ার্ড, ব্যাংক তথ্য বা এপিআই গোপন চাবি কখনো চাইবে না বা উত্তরে প্রকাশ করবে না।
-- উত্তরে সস্তা ইমোজি বা চটুল অলঙ্কার ব্যবহার করবে না; পরিচ্ছন্ন ও পেশাদার প্রাতিষ্ঠানিক উপস্থাপনা দেবে।
+const INTEGRITY = `\n\n## সততা ও নিরাপত্তা
+- নিশ্চিত না হলে কোনো রেফারেন্স, হাদিস বা সংখ্যা কল্পনা করবে না।
+- পাসওয়ার্ড, গোপন এপিআই কি বা ব্যক্তিগত সংবেদনশীল তথ্য কখনো চাইবে না বা প্রকাশ করবে না।
+- প্রয়োজন হলে উত্তরের শেষে প্রাসঙ্গিক ১ থেকে ৩টি বুদ্ধিদীপ্ত পরবর্তী অনুসন্ধানের পরামর্শ দিতে পারো:
+[[প্রশ্ন: প্রথম প্রস্তাবনা]]
+[[প্রশ্ন: দ্বিতীয় প্রস্তাবনা]]`;
 
-## ফলো-আপ প্রশ্ন (বাধ্যতামূলক ৩টি)
-প্রতিটি উত্তরের একেবারে শেষে ব্যবহারকারী পরবর্তীতে জিজ্ঞেস করতে পারেন এমন ঠিক ৩টি প্রাসঙ্গিক প্রশ্ন নিচের নির্দিষ্ট ফরম্যাটে আলাদা লাইনে দেবে:
-[[প্রশ্ন: প্রথম প্রশ্ন]]
-[[প্রশ্ন: দ্বিতীয় প্রশ্ন]]
-[[প্রশ্ন: তৃতীয় প্রশ্ন]]`;
-
-
-// ---------------------------------------------------------------------
-// অতিরিক্ত নির্দেশিকা (গ্রুপ ২, ৩, ৪, ৫-এর প্রম্পট-স্তরের নিয়ম)
-// ---------------------------------------------------------------------
 const ISLAMIC_GUARD = `\n\n## ইসলামিক জ্ঞান ও সততা গার্ডরেল (কঠোর)
 - [#21] কোনো হাদিস, আয়াত, কিতাবের নাম বা নম্বর কখনো বানাবে না। নিশ্চিত না হলে স্পষ্ট বলবে: "এই বর্ণনার নির্ভরযোগ্য সূত্র আমি নিশ্চিত করতে পারছি না।"
 - [#22] কুরআন, সহিহ বুখারি, সহিহ মুসলিম ও অন্যান্য প্রসিদ্ধ সুনান গ্রন্থ এবং স্বীকৃত ফিকহ গ্রন্থকে অগ্রাধিকার দেবে; দুর্বল (যঈফ) বর্ণনা হলে তা উল্লেখ করবে।
@@ -217,30 +190,26 @@ async function handleChat(request: Request): Promise<Response> {
         void supabaseAdmin.from("chat_usage").insert({ user_id: uid }).then(() => {});
         const linkedPagesP = s?.url_reader !== false && linkedText ? readUrls(linkedText) : Promise.resolve("");
 
-        const provider = (s?.provider ?? "lovable") as Provider;
+        const provider = ((s?.provider && (s.provider === "google" || s.provider === "groq" || s.provider === "openrouter" || s.provider === "openai"))
+          ? s.provider
+          : "google") as Provider;
         const stored = (s?.model || "").trim();
         const retired = /^gemini-1\.|^gemini-2\.|^gpt-3|^o1-|^gemini-pro$|^gemini-flash-latest$/i.test(stored);
         const baseModel = !stored || retired ? DEFAULT_MODELS[provider] : stored;
-        // ওয়েবসাইট/কোড অনুরোধে হালকা (lite) মডেল ছোট কোড দেয় — তাই শক্তিশালী মডেলে পাঠানো
         const lastText = String(parsed.data.messages[parsed.data.messages.length - 1]?.content ?? "");
-        const isSiteReq = /ওয়েবসাইট|ওয়েব সাইট|website|landing|html|পেজ বানা|অ্যাপ বানা/i.test(lastText);
-        // সাধারণ ছোট প্রশ্নে অতি-দ্রুত মডেল (২-৩ সেকেন্ডে উত্তর শুরু); ওয়েবসাইট/কোড/দীর্ঘ প্রশ্নে শক্তিশালী মডেল
-        // ব্যবহারকারী চ্যাট থেকে নির্দিষ্ট মডেল বেছে নিলে (শুধু অনুমোদিত তালিকা থেকে) সেটাই ব্যবহার
-        const picked = provider === "lovable" && parsed.data.model && LOVABLE_MODELS.some((m) => m.id === parsed.data.model) ? parsed.data.model : null;
-        // দ্রুত পথ: সাধারণ প্রশ্নে দ্রুততম মডেল (Google কী না থাকলেও বিল্ট-ইন দিয়ে)
-        const googleNoKey = provider === "google" && !keys?.google_key?.trim() && !process.env["GOOGLE_API_KEY"];
-        void googleNoKey;
-                // অ্যাডমিন প্যানেলে নির্ধারিত মডেলটিই চূড়ান্ত, কোনো স্বয়ংক্রিয় ৩.৮-ফ্ল্যাশ ওভাররাইড হবে না
+
+        // চ্যাটবক্সে ব্যবহারকারী নির্দিষ্ট কোনো মডেল বেছে নিলে (শুধু অনুমোদিত তালিকা থেকে)
+        const picked = parsed.data.model && CHAT_PICKER_MODELS.some((m) => m.id === parsed.data.model) ? parsed.data.model : null;
         let model = picked ?? baseModel;
-  
 
         type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
         const rawPool = (Array.isArray((keys as { key_pool?: unknown })?.key_pool) ? (keys as { key_pool: PoolKey[] }).key_pool : [])
-          .filter((p) => p && p.active !== false && (p.key?.trim() || p.provider === "ollama"));
+          .filter((p) => p && p.active !== false && p.key?.trim());
 
-        // API keys & Endpoints
-        let url = "https://ai.gateway.lovable.dev/v1/chat/completions";
-        let key = process.env["LOVABLE_API_KEY"];
+        // API keys & Endpoints - অনুমোদিত ৪টি মূল প্রোভাইডার
+        let url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+        let key = keys?.google_key?.trim() || rawPool.find((p) => p.provider === "google" && p.active !== false)?.key?.trim() || process.env["GOOGLE_API_KEY"];
+
         if (provider === "google") {
           url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
           key = keys?.google_key?.trim() || rawPool.find((p) => p.provider === "google" && p.active !== false)?.key?.trim() || process.env["GOOGLE_API_KEY"];
@@ -256,50 +225,24 @@ async function handleChat(request: Request): Promise<Response> {
         } else if (provider === "openai") {
           url = "https://api.openai.com/v1/chat/completions";
           key = keys?.openai_key?.trim() || rawPool.find((p) => p.provider === "openai" && p.active !== false)?.key?.trim() || process.env["OPENAI_API_KEY"];
-          if (!model || model.startsWith("gemini-") || model.startsWith("deepseek-") || model.startsWith("claude-") || model.startsWith("llama-")) model = "gpt-6-astra";
-        } else if (provider === "deepseek") {
-          url = "https://api.deepseek.com/chat/completions";
-          const poolDeepseek = rawPool.find((p) => p.provider === "deepseek" && p.active !== false)?.key?.trim();
-          key = poolDeepseek || process.env["DEEPSEEK_API_KEY"];
-          if (!model || !model.startsWith("deepseek-")) model = "deepseek-flash";
-        } else if (provider === "ollama") {
-          const poolOllama = rawPool.find((p) => p.provider === "ollama");
-          const configuredBase = poolOllama?.base_url || process.env["OLLAMA_BASE_URL"] || process.env["OLLAMA_URL"];
-          if (!configuredBase) return new Response("Ollama-র জন্য অ্যাডমিন প্যানেলে সার্ভারে পৌঁছানো যায় এমন Base URL দিন। ক্লাউড অ্যাপের localhost আপনার কম্পিউটার নয়।", { status: 400 });
-          const rawBase = configuredBase.replace(/\/$/, "");
-          url = rawBase.endsWith("/v1") ? `${rawBase}/chat/completions` : `${rawBase}/v1/chat/completions`;
-          key = poolOllama?.key?.trim() || process.env["OLLAMA_API_KEY"] || "ollama";
-          model = poolOllama?.model?.trim() || model || "deepseek-r1:latest";
+          if (!model || model.startsWith("gemini-") || model.startsWith("llama-")) model = "gpt-6-astra";
         }
 
-        // নিজস্ব Google কী থাকলে সরাসরি Google
-        const ownGoogle = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
-        if (ownGoogle && !picked && provider === "google") {
-          url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-          key = ownGoogle;
-          model = (baseModel || "gemini-2.5-flash").replace(/^google\//, "");
-        } else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
-          url = "https://ai.gateway.lovable.dev/v1/chat/completions";
-          key = process.env["LOVABLE_API_KEY"];
-          model = model.includes("/")
-            ? model
-            : provider === "google"
-            ? `google/${model}`
-            : provider === "deepseek"
-            ? `deepseek/${model}`
-            : DEFAULT_MODELS.lovable;
-        }
         // Admin-only: answer provider/model status from server-side settings without exposing keys.
-        // This reports configured primary selection, not a guarantee that a fallback won't be used.
         if (isModelStatusQuestion(lastText)) {
           if (!isAdmin) return stageStream(["think"], async () => "কোন AI provider বা model ব্যবহার হচ্ছে, এই তথ্য শুধু অ্যাডমিন দেখতে পারেন।");
-          const providerNames: Record<string, string> = { lovable: "Lovable AI", claude: "Claude via Lovable AI", google: "Google Gemini", openai: "OpenAI", deepseek: "DeepSeek", groq: "Groq", openrouter: "OpenRouter", ollama: "Ollama" };
+          const providerNames: Record<string, string> = { google: "Google Gemini", groq: "Groq", openrouter: "OpenRouter", openai: "OpenAI" };
           const activeSavedKey = rawPool.some((entry) => entry.provider === provider && entry.active !== false && Boolean(entry.key?.trim()));
-          const hasConfiguredKey = provider === "google" ? Boolean(keys?.google_key?.trim() || activeSavedKey || process.env["GOOGLE_API_KEY"]) : provider === "openai" ? Boolean(keys?.openai_key?.trim() || activeSavedKey || process.env["OPENAI_API_KEY"]) : provider === "lovable" || provider === "claude" ? Boolean(process.env["LOVABLE_API_KEY"]) : provider === "ollama" ? Boolean(rawPool.some((entry) => entry.provider === "ollama" && entry.active !== false && entry.base_url?.startsWith("https://"))) : Boolean(activeSavedKey || process.env[`${provider.toUpperCase()}_API_KEY`]);
-          const status = `অ্যাডমিন সেটিংস অনুযায়ী প্রধান provider: ${providerNames[provider] ?? provider}; নির্বাচিত model: ${model}. সংরক্ষিত/কনফিগার করা key: ${hasConfiguredKey ? "আছে" : "পাওয়া যায়নি"}। কোনো request-এ এই provider-এর quota বা availability সমস্যা হলে উত্তর দিতে সক্রিয় backup-এ failover হতে পারে; তখন ব্যবহৃত provider/model আলাদা হবে। কোনো API key এখানে দেখানো হয়নি।`;
+          const hasConfiguredKey = provider === "google"
+            ? Boolean(keys?.google_key?.trim() || activeSavedKey || process.env["GOOGLE_API_KEY"])
+            : provider === "openai"
+            ? Boolean(keys?.openai_key?.trim() || activeSavedKey || process.env["OPENAI_API_KEY"])
+            : Boolean(activeSavedKey || process.env[`${provider.toUpperCase()}_API_KEY`]);
+          const status = `অ্যাডমিন সেটিংস অনুযায়ী প্রধান provider: ${providerNames[provider] ?? provider}; নির্বাচিত model: ${model}. সংরক্ষিত/কনফিগার করা key: ${hasConfiguredKey ? "আছে" : "পাওয়া যায়নি"}। কোটা বা সংযোগ সমস্যা হলে সক্রিয় ব্যাকআপ কীতে স্বয়ংক্রিয় failover হবে। কোনো API key এখানে দেখানো হয়নি।`;
           return stageStream(["think"], async () => status);
         }
-        if (!key && provider !== "ollama") return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান বা বিল্ট-ইন মোড ব্যবহার করুন।", { status: 503 });
+
+        if (!key) return new Response("নির্বাচিত প্রোভাইডারের API Key সেট করা নেই। অ্যাডমিন প্যানেলে সঠিক Key বসান।", { status: 503 });
 
         // Merge Prompts properly so BASE_PROMPT is NEVER lost
         let system = PERSONA + "\n\n" + BASE_PROMPT;
@@ -408,48 +351,23 @@ async function handleChat(request: Request): Promise<Response> {
                 // অ্যাডমিন প্যানেল থেকে চিন্তার গতি (Thinking Speed / Reasoning Effort) কার্যকর
         const eff = s?.reasoning_effort || "low";
 
-        if (provider === "claude") {
-          const gatewayKey = process.env["LOVABLE_API_KEY"];
-          if (!gatewayKey) return new Response("Claude চালাতে Lovable AI চালু করতে হবে।", { status: 503 });
-          const claudeMessages = toClaudeMessages(msgs);
-          const upstream = await fetch("https://ai.gateway.lovable.dev/v1/messages", {
-            method: "POST",
-            headers: { "Lovable-API-Key": gatewayKey, "Content-Type": "application/json" },
-            body: JSON.stringify({ model, max_tokens: 65536, stream: true, system, messages: claudeMessages }),
-          }).catch((e) => new Response(String(e), { status: 502 }));
-          if (!upstream.ok || !upstream.body) {
-            const detail = (await upstream.text()).slice(0, 800);
-            return new Response(friendlyError(upstream.status, detail), { status: upstream.status >= 500 ? 502 : upstream.status });
-          }
-          stages.push("write");
-          return withStages(stages, adaptClaudeStream(upstream.body));
-        }
-
-        const attempts: { url: string; key: string; model: string; label: string; provider: string }[] = [{ url, key: key || "local", model, label: "primary", provider }];
+        const attempts: { url: string; key: string; model: string; label: string; provider: string }[] = [{ url, key: key || "", model, label: "primary", provider }];
+        // একই প্রোভাইডারের অন্যান্য ব্যাকআপ কী
         for (const p of rawPool) {
           if (p.provider === provider && p.key?.trim() && p.key.trim() !== key) {
             attempts.push({ url, key: p.key.trim(), model: p.model?.trim() || model, label: p.name || provider, provider });
           }
         }
+        // অন্যান্য অনুমোদিত প্রোভাইডারের সক্রিয় ব্যাকআপ কী (Failover)
         for (const p of rawPool) {
-          if (p.provider === "custom" && p.base_url?.startsWith("https://")) {
-            const b = p.base_url.replace(/\/$/, "");
-            const endpoint = b.endsWith("/chat/completions") ? b : b.endsWith("/v1") ? `${b}/chat/completions` : `${b}/v1/chat/completions`;
-            attempts.push({ url: endpoint, key: p.key?.trim() || "local", model: p.model?.trim() || model, label: p.name || "custom", provider: "custom" });
-          } else if (p.provider === "groq" && provider !== "groq" && p.key?.trim()) {
+          if (p.provider === "groq" && provider !== "groq" && p.key?.trim()) {
             attempts.push({ url: "https://api.groq.com/openai/v1/chat/completions", key: p.key.trim(), model: p.model?.trim() || "llama-3.3-70b-versatile", label: p.name || "groq", provider: "groq" });
           } else if (p.provider === "openrouter" && provider !== "openrouter" && p.key?.trim()) {
             attempts.push({ url: "https://openrouter.ai/api/v1/chat/completions", key: p.key.trim(), model: p.model?.trim() || "openrouter/free", label: p.name || "openrouter", provider: "openrouter" });
-          } else if (p.provider === "deepseek" && provider !== "deepseek" && p.key?.trim()) {
-            attempts.push({ url: "https://api.deepseek.com/chat/completions", key: p.key.trim(), model: p.model?.trim() || "deepseek-flash", label: p.name || "deepseek", provider: "deepseek" });
           } else if (p.provider === "openai" && provider !== "openai" && p.key?.trim()) {
             attempts.push({ url: "https://api.openai.com/v1/chat/completions", key: p.key.trim(), model: p.model?.trim() || "gpt-6-astra", label: p.name || "openai", provider: "openai" });
           } else if (p.provider === "google" && provider !== "google" && p.key?.trim()) {
             attempts.push({ url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: p.key.trim(), model: p.model?.trim() || "gemini-3.8-flash", label: p.name || "google", provider: "google" });
-          } else if (p.provider === "ollama" && provider !== "ollama" && p.base_url?.startsWith("https://")) {
-            const rawBase = p.base_url.replace(/\/$/, "");
-            const endpoint = rawBase.endsWith("/v1") ? `${rawBase}/chat/completions` : `${rawBase}/v1/chat/completions`;
-            attempts.push({ url: endpoint, key: p.key?.trim() || "ollama", model: p.model?.trim() || "deepseek-r1:latest", label: p.name || "ollama", provider: "ollama" });
           }
         }
 
@@ -507,7 +425,7 @@ async function handleChat(request: Request): Promise<Response> {
                 // গুগল বা ওপেনএআই-এর সব কী কোটা শেষ (৪২৯) বা অফলাইন হলেও যাতে চ্যাট উত্তর দেওয়া বন্ধ না করে
         if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"] && Date.now() - requestStartedAt < 12000) {
           const first = (model.includes("/") ? model : `${provider}/${model}`).replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
-          const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3.8-flash", "google/gemini-3.1-flash-lite"].filter(Boolean))].slice(0, 2);
+          const chain = [...new Set([first, "google/gemini-3.8-flash", "google/gemini-3.1-flash-lite"].filter(Boolean))].slice(0, 2);
           for (const gwModel of chain) {
             const remaining = 12000 - (Date.now() - requestStartedAt);
             if (remaining <= 0) break;
