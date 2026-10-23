@@ -9,3 +9,9 @@ it("classifies temporary service failure separately", () => {
 it("keeps private provider details out of voice errors", () => {
   expect(voiceError({ httpStatus: 402, message: "private-provider-detail" })).not.toContain("private-provider-detail");
 });
+
+it("explains that provider quotas cannot be removed and backups are attempted", () => {
+  const message = serviceError(429);
+  expect(message).toContain("ব্যাকআপ সেবাগুলোও চেষ্টা করেছে");
+  expect(message).toContain("কোটা");
+});

@@ -289,6 +289,16 @@ async function handleChat(request: Request): Promise<Response> {
             ? `deepseek/${model}`
             : DEFAULT_MODELS.lovable;
         }
+        // Admin-only: answer provider/model status from server-side settings without exposing keys.
+        // This reports configured primary selection, not a guarantee that a fallback won't be used.
+        if (isModelStatusQuestion(lastText)) {
+          if (!isAdmin) return stageStream(["think"], async () => "কোন AI provider বা model ব্যবহার হচ্ছে, এই তথ্য শুধু অ্যাডমিন দেখতে পারেন।");
+          const providerNames: Record<string, string> = { lovable: "Lovable AI", claude: "Claude via Lovable AI", google: "Google Gemini", openai: "OpenAI", deepseek: "DeepSeek", groq: "Groq", openrouter: "OpenRouter", ollama: "Ollama" };
+          const activeSavedKey = rawPool.some((entry) => entry.provider === provider && entry.active !== false && Boolean(entry.key?.trim()));
+          const hasConfiguredKey = provider === "google" ? Boolean(keys?.google_key?.trim() || activeSavedKey || process.env["GOOGLE_API_KEY"]) : provider === "openai" ? Boolean(keys?.openai_key?.trim() || activeSavedKey || process.env["OPENAI_API_KEY"]) : provider === "lovable" || provider === "claude" ? Boolean(process.env["LOVABLE_API_KEY"]) : provider === "ollama" ? Boolean(rawPool.some((entry) => entry.provider === "ollama" && entry.active !== false && entry.base_url?.startsWith("https://"))) : Boolean(activeSavedKey || process.env[`${provider.toUpperCase()}_API_KEY`]);
+          const status = `অ্যাডমিন সেটিংস অনুযায়ী প্রধান provider: ${providerNames[provider] ?? provider}; নির্বাচিত model: ${model}. সংরক্ষিত/কনফিগার করা key: ${hasConfiguredKey ? "আছে" : "পাওয়া যায়নি"}। কোনো request-এ এই provider-এর quota বা availability সমস্যা হলে উত্তর দিতে সক্রিয় backup-এ failover হতে পারে; তখন ব্যবহৃত provider/model আলাদা হবে। কোনো API key এখানে দেখানো হয়নি।`;
+          return stageStream(["think"], async () => status);
+        }
         if (!key && provider !== "ollama") return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান বা বিল্ট-ইন মোড ব্যবহার করুন।", { status: 503 });
 
         // Merge Prompts properly so BASE_PROMPT is NEVER lost
@@ -452,9 +462,9 @@ async function handleChat(request: Request): Promise<Response> {
           if (hasImage && a.label !== "primary" && !a.url.includes("generativelanguage.googleapis.com") && !a.url.includes("openai.com")) continue;
           // Failover must stay bounded: a slow provider should not multiply 20s waits across keys.
           const ac = new AbortController();
-          const remainingBudget = 25000 - (Date.now() - requestStartedAt);
+          const remainingBudget = 12000 - (Date.now() - requestStartedAt);
           if (remainingBudget <= 0) break;
-          const perAttemptTimeout = Math.min(a.url.includes("generativelanguage") ? 10000 : 12000, remainingBudget);
+          const perAttemptTimeout = Math.min(a.label === "primary" ? 7000 : 3500, remainingBudget);
           const timer = setTimeout(() => ac.abort(), perAttemptTimeout);
           // Provider-specific payload: avoid OpenAI-only params on Gemini, DeepSeek,
           // Ollama and custom OpenAI-compatible services.
@@ -495,11 +505,11 @@ async function handleChat(request: Request): Promise<Response> {
           // must not prevent trying the remaining independent backup providers.
         }
                 // গুগল বা ওপেনএআই-এর সব কী কোটা শেষ (৪২৯) বা অফলাইন হলেও যাতে চ্যাট উত্তর দেওয়া বন্ধ না করে
-        if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"] && Date.now() - requestStartedAt < 25000) {
+        if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"] && Date.now() - requestStartedAt < 12000) {
           const first = (model.includes("/") ? model : `${provider}/${model}`).replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
           const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3.8-flash", "google/gemini-3.1-flash-lite"].filter(Boolean))].slice(0, 2);
           for (const gwModel of chain) {
-            const remaining = 25000 - (Date.now() - requestStartedAt);
+            const remaining = 12000 - (Date.now() - requestStartedAt);
             if (remaining <= 0) break;
             const g = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
               method: "POST",
@@ -601,17 +611,18 @@ function pick(a: string[]): string {
   return a[Math.floor(Math.random() * a.length)] ?? a[0] ?? "";
 }
 
+function isModelStatusQuestion(text: string): boolean {
+  return /(কোন|কি|কী|which|what|বর্তমানে|এখন).{0,50}(মডেল|model|provider|প্রোভাইডার|ইঞ্জিন|এপিআই)/i.test(text)
+    || /(মডেল|model|provider|প্রোভাইডার|ইঞ্জিন|এপিআই).{0,50}(কোন|কি|কী|চলছে|ব্যবহার|বর্তমানে|এখন)/i.test(text);
+}
+
 function friendlyError(status: number, text: string): string {
   if ([402, 429, 503].includes(status)) return serviceError(status, text);
   const t = text.toLowerCase();
   const billing = status === 402 || /insufficient[_ ]?(credit|balance|funds)|billing|payment required|credit balance|out of credits/.test(t) && !/rate|per minute|requests per/.test(t);
   if (billing) return "এআই সেবার অ্যাকাউন্টে ব্যালান্স বা বিলিং সমস্যার কথা জানিয়েছে। অ্যাডমিন প্যানেলে কী-টি যাচাই করুন বা অন্য কী যোগ করুন।";
   if (status === 429 || /rate.?limit|too many requests|resource_exhausted|quota/.test(t))
-    return pick([
-      "মনে হচ্ছে এখন এআই সেবায় সাময়িক অনুরোধের চাপ (Rate Limit) হয়েছে। এক মিনিট পর আবার পাঠান। সাময়িক সমস্যার জন্য দুঃখিত।",
-      "এই মুহূর্তে অনুরোধ একটু বেশি হয়ে গেছে, তাই সেবা সাময়িক বিরতি চাইছে। একটু পরে আবার চেষ্টা করুন সাময়িক সমস্যার জন্য দুঃখিত।",
-      "সাময়িক সীমায় পৌঁছেছে — এটি স্থায়ী কিছু নয়। কিছুক্ষণ পর আবার লিখলেই উত্তর পাবেন সাময়িক সমস্যার জন্য দুঃখিত।",
-    ]);
+    return serviceError(429, text);
   if (status === 401 || status === 403 || /api key|permission|unauthori[sz]ed|invalid.*key/.test(t))
     return "এআই কী গ্রহণ করা হয়নি (কী ভুল বা অনুমতি নেই)। অ্যাডমিন প্যানেলে কী যাচাই করুন।";
   if (status === 404 || /model.*(not found|no longer|deprecated)|model_not_found/.test(t))
