@@ -29,7 +29,7 @@ export const synthesizeGeminiSpeech = createServerFn({ method: "POST" })
     try {
       const ai = new GoogleGenAI({ apiKey: key });
       const interaction = await ai.interactions.create({
-        model: "gemini-3.8-flash-tts",
+        model: "gemini-3.8-flash-lite-tts",
         input: [
           {
             type: "text",
