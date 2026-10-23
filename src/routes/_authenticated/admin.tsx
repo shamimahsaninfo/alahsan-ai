@@ -411,8 +411,24 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
   );
 }
 
-type Issue = { id: string; area: string; title: string; detail: string; fix?: string; fixLabel?: string };
-type Scan = { issues: Issue[]; passed: string[]; at: string; repaired?: { ok: boolean; message: string } };
+type Issue = {
+  id: string;
+  area: string;
+  title: string;
+  detail: string;
+  severity?: "critical" | "warning" | "info";
+  root_cause?: string;
+  agent_solution?: string;
+  fix?: string;
+  fixLabel?: string;
+};
+type Scan = {
+  issues: Issue[];
+  passed: string[];
+  at: string;
+  agent_summary?: string;
+  repaired?: { ok: boolean; message: string; details?: string[] };
+};
 
 function HealthCheck() {
   const [res, setRes] = useState<Scan | null>(null);
@@ -424,41 +440,73 @@ function HealthCheck() {
   }, []);
   const run = async (fix?: string, label?: string) => {
     setNote(null);
-    setLive(fix ? `"${label}" সমাধান করা হচ্ছে, তারপর আবার স্ক্যান চলবে…` : "পুরো সিস্টেম স্ক্যান চলছে — ডাটাবেস, এআই, ছবি, কী-পুল, ড্রাইভ, অ্যাডমিন…");
+    setLive(fix === "heal_all"
+      ? "নির্বাচিত নিরাপদ সেটিংস পরীক্ষা ও মেরামত হচ্ছে…"
+      : fix
+      ? `"${label}" সমস্যা মেরামত ও পুনরায় যাচাই হচ্ছে…`
+      : "সম্পূর্ণ ডায়াগনস্টিক স্ক্যান: Gemini, OpenAI, DeepSeek, ডাটাবেস, কী-পুল ও মেমরি যাচাই হচ্ছে…");
     try {
       const { data } = await supabase.auth.getSession();
-      const r = await fetch("/api/health", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` }, body: JSON.stringify(fix ? { fix } : {}) });
+      const r = await fetch("/api/health", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` },
+        body: JSON.stringify(fix ? { fix } : {}),
+      });
       if (!r.ok) throw new Error(await r.text());
       const j: Scan = await r.json();
       setRes(j);
       if (fix) {
-        const still = j.issues.some((i) => i.fix === fix);
-        setNote({ ok: !!j.repaired?.ok && !still, text: `${j.repaired?.message ?? ""}${still ? " — কিন্তু সমস্যাটি এখনো আছে" : " — যাচাই করে দেখা গেছে সমাধান হয়েছে"}` });
-      } else setNote({ ok: j.issues.length === 0, text: j.issues.length ? `${j.issues.length}টি প্রকৃত সমস্যা পাওয়া গেছে` : "কোনো সমস্যা নেই — সব সচল" });
-    } catch (e: any) { setNote({ ok: false, text: e?.message || "স্ক্যান ব্যর্থ" }); }
+        const still = j.issues.some((i) => i.fix === fix || (fix === "heal_all" && i.severity === "critical"));
+        setNote({
+          ok: !!j.repaired?.ok && !still,
+          text: `${j.repaired?.message ?? ""}${still ? " — কিন্তু কিছু সমস্যা এখনো রয়ে গেছে; নিচের Root Cause পড়ুন" : " — পুনরায় স্ক্যান করে যাচাই করা হয়েছে"}`,
+        });
+      } else {
+        setNote({ ok: j.issues.length === 0, text: j.agent_summary || (j.issues.length ? `${j.issues.length}টি সমস্যা পাওয়া গেছে` : "সব সচল") });
+      }
+    } catch (e: any) {
+      setNote({ ok: false, text: e?.message || "স্ক্যান ব্যর্থ হয়েছে" });
+    }
     setLive(null);
   };
+  const critical = res?.issues.some((i) => i.severity === "critical");
   return (
     <section className="mt-6 rounded-2xl border border-border bg-card/80 p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="font-display text-xl text-primary">৯. মেগা ডায়াগনস্টিক সেন্টার</h2>
-        <button onClick={() => run()} disabled={!!live} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60">পুরো স্ক্যান করুন</button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="font-display text-xl text-primary">৯. মেগা ডায়াগনস্টিক সেন্টার</h2>
+          <p className="mt-1 text-xs text-muted-foreground">বিভিন্ন এপিআই-এর লাইভ পরীক্ষা, সম্ভাব্য মূল কারণ, সীমিত নিরাপদ মেরামত ও মেরামতের পর পুনরায় যাচাই। সব ধরনের সমস্যা নিজে সমাধানের নিশ্চয়তা নয়।</p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button type="button" onClick={() => run()} disabled={!!live} className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60">ডায়াগনসিস স্ক্যান</button>
+          <button type="button" onClick={() => run("heal_all", "সব সমস্যা")} disabled={!!live} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">🔧 নিরাপদ Auto-Repair</button>
+        </div>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">{res ? `সর্বশেষ স্ক্যান: ${new Date(res.at).toLocaleString("bn-BD")}` : "এখনো স্ক্যান হয়নি।"}</p>
+      <p className="mt-2 text-xs text-muted-foreground">{res ? `সর্বশেষ স্ক্যান: ${new Date(res.at).toLocaleString("bn-BD")}` : "এখনো স্ক্যান হয়নি।"}</p>
       {live && <p className="live-status mt-3 text-sm">{live}</p>}
-      {note && !live && <p className={`mt-3 text-sm ${note.ok ? "text-primary" : "text-destructive"}`}>{note.ok ? "সফল: " : "ফলাফল: "}{note.text}</p>}
-      {res && res.issues.length === 0 && <p className="mt-3 rounded-lg border border-primary/40 px-3 py-2 text-sm text-primary">কোনো সক্রিয় সমস্যা নেই।</p>}
+      {res?.agent_summary && !live && <p className="mt-3 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm">{res.agent_summary}</p>}
+      {note && !live && <p className={`mt-2 text-sm ${note.ok ? "text-primary" : "text-destructive"}`}>{note.text}</p>}
+      {res && res.issues.length === 0 && <p className="mt-3 rounded-lg border border-primary/40 px-3 py-2 text-sm text-primary">✅ কোনো সক্রিয় সমস্যা নেই — এপিআই, ব্যাকআপ কী ও সিস্টেম সচল।</p>}
       <ul className="mt-3 space-y-2">
         {res?.issues.map((c) => (
-          <li key={c.id} className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 px-3 py-2 text-sm">
-            <span><span className="text-destructive">{c.area}:</span> <b>{c.title}</b><br /><span className="text-xs text-muted-foreground">{c.detail}</span></span>
-            {c.fix ? (
-              <button onClick={() => run(c.fix, c.title)} disabled={!!live} className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-60">সমাধান করুন</button>
-            ) : <span className="shrink-0 text-xs text-muted-foreground">হাতে ঠিক করতে হবে</span>}
+          <li key={c.id} className={`rounded-lg border px-3 py-3 text-sm ${c.severity === "critical" ? "border-destructive/50 bg-destructive/5" : "border-border"}`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <span className="min-w-0">
+                <span className={c.severity === "critical" ? "text-destructive" : "text-primary"}>{c.area}:</span> <b>{c.title}</b>
+                <span className="ml-2 rounded-full border px-2 py-0.5 text-[10px]">{c.severity === "critical" ? "গুরুতর" : c.severity === "warning" ? "সতর্কতা" : "তথ্য"}</span>
+                <br /><span className="mt-1 block text-xs text-muted-foreground">প্রযুক্তিগত বিবরণ: {c.detail}</span>
+                {c.root_cause && <span className="mt-1 block text-xs"><b>চিহ্নিত মূল কারণ:</b> {c.root_cause}</span>}
+                {c.agent_solution && <span className="mt-1 block text-xs text-primary"><b>এআই এজেন্টের প্রস্তাব:</b> {c.agent_solution}</span>}
+              </span>
+              {c.fix ? (
+                <button type="button" onClick={() => run(c.fix, c.title)} disabled={!!live} className="shrink-0 self-start rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-60">{c.fixLabel || "মেরামত করুন"}</button>
+              ) : <span className="shrink-0 text-xs text-muted-foreground">নিজে যাচাই/সমাধান দরকার</span>}
+            </div>
           </li>
         ))}
       </ul>
-      {res && res.passed.length > 0 && <p className="mt-3 text-xs text-muted-foreground">সচল: {res.passed.join(" · ")}</p>}
+      {res && res.passed.length > 0 && <details className="mt-3 text-xs text-muted-foreground"><summary className="cursor-pointer">সফল যাচাই ({res.passed.length}) দেখুন</summary><p className="mt-2 leading-6">{res.passed.join(" · ")}</p></details>}
+      <p className="mt-3 text-[11px] text-muted-foreground">নিরাপত্তার জন্য AI Agent কোনো API Key তৈরি বা পরিবর্তন করে না, বিলিং/কোটা ঠিক করতে পারে না এবং কোড নিজে প্রকাশ করে না। এটি কেবল যাচাইকৃত সেটিংস/প্রোভাইডার পরিবর্তন করে; গোপন তথ্য কখনো স্ক্যানে দেখানো হয় না।</p>
     </section>
   );
 }

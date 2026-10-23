@@ -243,17 +243,17 @@ async function handleChat(request: Request): Promise<Response> {
         let key = process.env["LOVABLE_API_KEY"];
         if (provider === "google") {
           url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-          key = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
+          key = keys?.google_key?.trim() || rawPool.find((p) => p.provider === "google")?.key?.trim() || process.env["GOOGLE_API_KEY"];
+          if (!model || !model.startsWith("gemini-")) model = "gemini-3.8-flash";
         } else if (provider === "openai") {
           url = "https://api.openai.com/v1/chat/completions";
-          key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
+          key = keys?.openai_key?.trim() || rawPool.find((p) => p.provider === "openai")?.key?.trim() || process.env["OPENAI_API_KEY"];
+          if (!model || model.startsWith("gemini-") || model.startsWith("deepseek-") || model.startsWith("claude-")) model = "gpt-6-astra";
         } else if (provider === "deepseek") {
           url = "https://api.deepseek.com/chat/completions";
           const poolDeepseek = rawPool.find((p) => p.provider === "deepseek")?.key?.trim();
           key = poolDeepseek || process.env["DEEPSEEK_API_KEY"];
-          if (!baseModel || baseModel.startsWith("gemini") || baseModel.startsWith("gpt")) {
-            model = "deepseek-v4-flash";
-          }
+          if (!model || !model.startsWith("deepseek-")) model = "deepseek-flash";
         } else if (provider === "ollama") {
           const poolOllama = rawPool.find((p) => p.provider === "ollama");
           const configuredBase = poolOllama?.base_url || process.env["OLLAMA_BASE_URL"] || process.env["OLLAMA_URL"];
@@ -389,11 +389,6 @@ async function handleChat(request: Request): Promise<Response> {
 
                 // অ্যাডমিন প্যানেল থেকে চিন্তার গতি (Thinking Speed / Reasoning Effort) কার্যকর
         const eff = s?.reasoning_effort || "low";
-        if (eff === "none") {
-          body["reasoning_effort"] = "none";
-        } else if (["low", "medium", "high", "xhigh"].includes(eff)) {
-          body["reasoning_effort"] = eff === "xhigh" && provider === "google" ? "high" : eff;
-        }
 
         if (provider === "claude") {
           const gatewayKey = process.env["LOVABLE_API_KEY"];
@@ -412,23 +407,27 @@ async function handleChat(request: Request): Promise<Response> {
           return withStages(stages, adaptClaudeStream(upstream.body));
         }
 
-        const attempts: { url: string; key: string; model: string; label: string }[] = [{ url, key: key || "local", model, label: "primary" }];
+        const attempts: { url: string; key: string; model: string; label: string; provider: string }[] = [{ url, key: key || "local", model, label: "primary", provider }];
         for (const p of rawPool) {
           if (p.provider === provider && p.key?.trim() && p.key.trim() !== key) {
-            attempts.push({ url, key: p.key.trim(), model, label: p.name || provider });
+            attempts.push({ url, key: p.key.trim(), model: p.model?.trim() || model, label: p.name || provider, provider });
           }
         }
         for (const p of rawPool) {
           if (p.provider === "custom" && p.base_url?.startsWith("https://")) {
             const b = p.base_url.replace(/\/$/, "");
             const endpoint = b.endsWith("/chat/completions") ? b : b.endsWith("/v1") ? `${b}/chat/completions` : `${b}/v1/chat/completions`;
-            attempts.push({ url: endpoint, key: p.key?.trim() || "local", model: p.model?.trim() || model, label: p.name || "custom" });
+            attempts.push({ url: endpoint, key: p.key?.trim() || "local", model: p.model?.trim() || model, label: p.name || "custom", provider: "custom" });
           } else if (p.provider === "deepseek" && provider !== "deepseek" && p.key?.trim()) {
-            attempts.push({ url: "https://api.deepseek.com/chat/completions", key: p.key.trim(), model: p.model?.trim() || "deepseek-reasoner", label: p.name || "deepseek" });
+            attempts.push({ url: "https://api.deepseek.com/chat/completions", key: p.key.trim(), model: p.model?.trim() || "deepseek-flash", label: p.name || "deepseek", provider: "deepseek" });
+          } else if (p.provider === "openai" && provider !== "openai" && p.key?.trim()) {
+            attempts.push({ url: "https://api.openai.com/v1/chat/completions", key: p.key.trim(), model: p.model?.trim() || "gpt-6-astra", label: p.name || "openai", provider: "openai" });
+          } else if (p.provider === "google" && provider !== "google" && p.key?.trim()) {
+            attempts.push({ url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: p.key.trim(), model: p.model?.trim() || "gemini-3.8-flash", label: p.name || "google", provider: "google" });
           } else if (p.provider === "ollama" && provider !== "ollama" && p.base_url?.startsWith("https://")) {
             const rawBase = p.base_url.replace(/\/$/, "");
             const endpoint = rawBase.endsWith("/v1") ? `${rawBase}/chat/completions` : `${rawBase}/v1/chat/completions`;
-            attempts.push({ url: endpoint, key: p.key?.trim() || "ollama", model: p.model?.trim() || "deepseek-r1:latest", label: p.name || "ollama" });
+            attempts.push({ url: endpoint, key: p.key?.trim() || "ollama", model: p.model?.trim() || "deepseek-r1:latest", label: p.name || "ollama", provider: "ollama" });
           }
         }
 
@@ -441,10 +440,28 @@ async function handleChat(request: Request): Promise<Response> {
           // শুধু সংযোগ/প্রথম সাড়ার জন্য সময়সীমা; স্ট্রিম শুরু হলে আর কাটবে না
           const ac = new AbortController();
           const timer = setTimeout(() => ac.abort(), a.url.includes("generativelanguage") ? 15000 : attempts.length > 1 ? 20000 : 45000);
+          // Provider-specific payload: avoid OpenAI-only params on Gemini, DeepSeek,
+          // Ollama and custom OpenAI-compatible services.
+          const attemptIsOpenAI = a.url.includes("api.openai.com");
+          const attemptIsReasoning = attemptIsOpenAI && (/^(o1|o3|o4)/i.test(a.model) || /^gpt-6/i.test(a.model));
+          let attemptModel = a.model;
+          if (a.provider === "openai" && (!/^gpt-|^o[134]/i.test(attemptModel))) attemptModel = "gpt-6-astra";
+          if (a.provider === "deepseek" && !/^deepseek-/.test(attemptModel)) attemptModel = "deepseek-flash";
+          if (a.provider === "google" && !/^gemini-/.test(attemptModel)) attemptModel = "gemini-3.8-flash";
+          const attemptBody: Record<string, unknown> = {
+            model: attemptModel,
+            stream: true,
+            messages: body["messages"],
+            // OpenAI reasoning models use max_completion_tokens; ordinary models use max_tokens.
+            // Do not send reasoning_effort to non-reasoning models (frequent HTTP 400 cause).
+            ...(attemptIsReasoning
+              ? { max_completion_tokens: 8192, ...(eff !== "none" ? { reasoning_effort: eff === "xhigh" ? "high" : eff } : {}) }
+              : { max_tokens: 8192 }),
+          };
           res = await fetch(a.url, {
             method: "POST",
             headers: { Authorization: `Bearer ${a.key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ ...body, model: a.model }),
+            body: JSON.stringify(attemptBody),
             signal: ac.signal,
           }).catch((e) => new Response(String(e?.name === "AbortError" ? "timeout" : e), { status: e?.name === "AbortError" ? 504 : 502 }));
           clearTimeout(timer);
@@ -458,7 +475,7 @@ async function handleChat(request: Request): Promise<Response> {
                 // গুগল বা ওপেনএআই-এর সব কী কোটা শেষ (৪২৯) বা অফলাইন হলেও যাতে চ্যাট উত্তর দেওয়া বন্ধ না করে
         if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"]) {
           const first = (model.includes("/") ? model : `${provider}/${model}`).replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
-          const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3-flash-preview", "google/gemini-3.1-pro-preview"].filter(Boolean))];
+          const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3.8-flash", "google/gemini-3.1-flash-lite"].filter(Boolean))];
           for (const gwModel of chain) {
             const g = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
               method: "POST",

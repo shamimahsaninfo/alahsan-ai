@@ -3,35 +3,38 @@ export type Provider = "lovable" | "claude" | "google" | "openai" | "deepseek" |
 export const LOVABLE_MODELS = [
   { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (সবচেয়ে শক্তিশালী যুক্তি)" },
   { id: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash (দ্রুত ও শক্তিশালী)" },
-  { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash" },
   { id: "google/gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite (সাশ্রয়ী)" },
   { id: "openai/gpt-6-astra", label: "GPT-6 Astra (সর্বোচ্চ ক্ষমতা)" },
-  { id: "openai/gpt-6-sol", label: "GPT-6 Sol" },
-  { id: "openai/gpt-5.5", label: "GPT-5.5" },
+  { id: "openai/gpt-6.1-sol", label: "GPT-6.1 Sol" },
+  { id: "openai/gpt-6-luna", label: "GPT-6 Luna" },
 ];
 
 export const CLAUDE_MODELS = [
-  { id: "claude-opus-5", label: "Claude Opus 5 (জটিল বিশ্লেষণ ও কোডিং)" },
-  { id: "claude-sonnet-5", label: "Claude Sonnet 5 (গতি ও বুদ্ধিমত্তার ভারসাম্য)" },
-  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (দ্রুত)" },
+  { id: "claude-sonnet-5", label: "Claude Sonnet 5 (গতি, বুদ্ধি ও কোডিংয়ের ভারসাম্য)" },
+  { id: "claude-opus-5", label: "Claude Opus 5 (গভীর বিশ্লেষণ ও জটিল সমস্যা)" },
+  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (অতি দ্রুত)" },
+  { id: "claude-3-7-sonnet-20250219", label: "Claude 3.7 Sonnet (Anthropic API)" },
 ];
 
 export const GOOGLE_MODELS = [
-  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash (সর্বশেষ, দ্রুত ও শক্তিশালী)" },
+  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash (দ্রুত ও শক্তিশালী)" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (স্থায়ী ও নির্ভরযোগ্য)" },
   { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite (সাশ্রয়ী)" },
-  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
-  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (পেইড কী লাগে)" },
 ];
 
 export const OPENAI_MODELS = [
-  { id: "gpt-5.5", label: "GPT-5.5" },
-  { id: "gpt-4.1", label: "GPT-4.1" },
-  { id: "gpt-4o", label: "GPT-4o" },
+  { id: "gpt-6-astra", label: "GPT-6 Astra (অফিশিয়াল OpenAI - গভীর যুক্তি ও কোডিং)" },
+  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol (ভারসাম্যপূর্ণ ও শক্তিশালী)" },
+  { id: "gpt-6-luna", label: "GPT-6 Luna (দ্রুত ও সাশ্রয়ী)" },
+  { id: "gpt-4o", label: "GPT-4o (পূর্ববর্তী OpenAI মডেল)" },
+  { id: "o3-mini", label: "o3-mini (উন্নত যুক্তি ও কোডিং)" },
 ];
 
 export const DEEPSEEK_MODELS = [
-  { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro (গভীর বিশ্লেষণ)" },
-  { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash (দ্রুত)" },
+  { id: "deepseek-flash", label: "DeepSeek Flash (অফিশিয়াল API, দ্রুত)" },
+  { id: "deepseek-reasoner", label: "DeepSeek-R1 / Reasoner (গভীর যুক্তি ও চিন্তাশীল)" },
+
+  { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
 ];
 
 export const OLLAMA_MODELS = [
@@ -45,7 +48,7 @@ export const DEFAULT_MODELS: Record<Provider, string> = {
   lovable: "openai/gpt-6-astra",
   claude: "claude-sonnet-5",
   google: "gemini-3.8-flash",
-  openai: "gpt-5.5",
-  deepseek: "deepseek-v4-flash",
+  openai: "gpt-6-astra",
+  deepseek: "deepseek-flash",
   ollama: "deepseek-r1:latest",
 };
