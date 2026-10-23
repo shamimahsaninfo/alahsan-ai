@@ -491,6 +491,7 @@ function ChatPage() {
     // Show/store only a short label; the full file text goes to the AI for this message only
     const docLabels = curDocs.map((d) => `[সংযুক্ত ফাইল: ${d.name}]`).join(" ");
     const text = curDocs.length ? `${typed}${docLabels ? `\n\n${docLabels}` : ""}` : typed;
+    const deferVoiceUntilFinal = /ওয়েবসাইট|ওয়েব সাইট|website|landing|html|পেজ বানা|অ্যাপ বানা|কোড|code|javascript|typescript|python|react/i.test(typed);
     const modeHint = MODES.find((x) => x.id === mode)?.hint;
     const docsFormatted = curDocs.map((d) => `=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 35000)}`).join("\n\n");
     const baseText = curDocs.length ? `${typed}\n\n${docsFormatted}` : typed;
@@ -529,6 +530,8 @@ function ChatPage() {
     }
 
     let full = "";
+    let voiceRun: number | null = voiceOut && !deferVoiceUntilFinal ? geminiTts.beginStream() : null;
+    let voicePending = "";
     let failed = false;
     let wrote = false;
     const showErr = (msg: string) => { failed = true; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full ? `${full}\n\n${msg}` : msg, error: true }]); };
@@ -559,6 +562,25 @@ function ChatPage() {
           if (delta) {
             if (!wrote) { wrote = true; pushStage("write"); }
             full += delta;
+            if (voiceRun !== null) {
+              voicePending += delta;
+              // Send complete Bengali/English sentences to TTS before the full answer finishes.
+              // For fenced code, defer to the normal cleaned-up final playback instead.
+              if (voicePending.trimStart().startsWith("```")) {
+                geminiTts.stop();
+                voiceRun = null;
+              } else {
+                const sentence = /[।.!?](?:[\s\n]+|$)/g;
+                let match: RegExpExecArray | null;
+                let consumed = 0;
+                while ((match = sentence.exec(voicePending)) !== null) {
+                  const part = voicePending.slice(consumed, match.index + match[0].length).trim();
+                  if (part) geminiTts.enqueue(part, voiceRun);
+                  consumed = match.index + match[0].length;
+                }
+                if (consumed) voicePending = voicePending.slice(consumed);
+              }
+            }
             setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]);
           }
         } catch { /* অসম্পূর্ণ/ভাঙা অংশ বাদ */ }
@@ -622,7 +644,12 @@ function ChatPage() {
           }
         } catch { full += "\n\nলাইভ লিংক তৈরির সময় সংযোগ বিচ্ছিন্ন হয়েছে।"; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]); }
       }
-      if (voiceOut) void geminiTts.speak(full);
+      if (voiceOut && !deferVoiceUntilFinal) {
+        if (voiceRun !== null) geminiTts.finishStream(voicePending, voiceRun);
+        else void geminiTts.speak(full);
+      } else if (voiceOut) {
+        void geminiTts.speak(full);
+      }
       await supabase.from("messages").insert({ conversation_id: convId, role: "assistant", content: full, user_id: user.id });
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
       supabase.auth.getSession().then(({ data: s3 }) =>

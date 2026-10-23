@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { synthesizeGeminiSpeech } from "@/lib/gemini-tts.functions";
 
 const MAX_SPEECH_CHARS = 1200;
-const FIRST_CHUNK_TARGET_CHARS = 220;
+const FIRST_CHUNK_TARGET_CHARS = 120;
 
 function stripMarkdownAndNoise(text: string): string {
   return text
@@ -71,11 +71,19 @@ export function useGeminiTts() {
   const currentAudio = useRef<HTMLAudioElement | null>(null);
   const currentUrl = useRef<string | null>(null);
   const generation = useRef(0);
+  const queue = useRef<string[]>([]);
+  const queuedCharacters = useRef(0);
+  const pumping = useRef(false);
+  const finishedRun = useRef<number | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const stop = useCallback(() => {
     generation.current++;
+    queue.current = [];
+    queuedCharacters.current = 0;
+    finishedRun.current = null;
+    pumping.current = false;
     if (currentAudio.current) {
       currentAudio.current.pause();
       currentAudio.current.onended = null;
@@ -89,70 +97,80 @@ export function useGeminiTts() {
     setSpeaking(false);
   }, []);
 
-  const speak = useCallback(
-    async (raw: string) => {
-      stop();
-      setError(null);
-      const run = generation.current;
-      const chunks = prepareSpeechChunks(raw);
-      if (!chunks.length) return;
-
-      setSpeaking(true);
-
-      try {
-        // প্লেব্যাকে অডিও সারিবদ্ধ রাখা ও প্রিলোড করার পাইপলাইন
-        let pendingAudioPromise: Promise<{ audioBase64: string; mimeType: string }> | null = null;
-
-        for (let i = 0; i < chunks.length; i++) {
-          if (generation.current !== run) return;
-
-          const currentChunk = chunks[i];
-          if (!currentChunk) continue;
-
-          // বর্তমান চাংকের জন্য রিকোয়েস্ট নেওয়া
-          const chunkPromise = pendingAudioPromise ?? synthesize({ data: { text: currentChunk } });
-          pendingAudioPromise = null;
-
-          // পরবর্তী চাংক থাকলে ব্যাকগ্রাউন্ডে আগে থেকেই কল করে রাখা (পাইপলাইনিং) যাতে মাঝে কোনো বিরতি না থাকে
-          const nextChunk = chunks[i + 1];
-          if (nextChunk) {
-            pendingAudioPromise = synthesize({ data: { text: nextChunk } });
-          }
-
-          const result = await chunkPromise;
-          if (generation.current !== run) return;
-
-          const url = URL.createObjectURL(
-            new Blob([toBase64Bytes(result.audioBase64)], { type: result.mimeType }),
-          );
-          currentUrl.current = url;
-          const audio = new Audio(url);
-          currentAudio.current = audio;
-
-          await new Promise<void>((resolve, reject) => {
-            audio.onended = () => resolve();
-            audio.onerror = () => reject(new Error("অডিও চালানো যায়নি।"));
-            void audio.play().catch(reject);
-          });
-
-          URL.revokeObjectURL(url);
-          if (currentUrl.current === url) currentUrl.current = null;
-          if (currentAudio.current === audio) currentAudio.current = null;
-        }
-      } catch (failure) {
-        if (generation.current === run) {
-          setError(failure instanceof Error ? failure.message : "ভয়েস চালানো যায়নি।");
-          setSpeaking(false);
-        }
-        return;
+  const pump = useCallback(async (run: number) => {
+    if (pumping.current) return;
+    pumping.current = true;
+    try {
+      while (generation.current === run && queue.current.length) {
+        const text = queue.current.shift();
+        if (!text) continue;
+        const result = await synthesize({ data: { text } });
+        if (generation.current !== run) return;
+        const url = URL.createObjectURL(new Blob([toBase64Bytes(result.audioBase64)], { type: result.mimeType }));
+        currentUrl.current = url;
+        const audio = new Audio(url);
+        currentAudio.current = audio;
+        await new Promise<void>((resolve, reject) => {
+          audio.onended = () => resolve();
+          audio.onerror = () => reject(new Error("অডিও চালানো যায়নি।"));
+          audio.onpause = () => { if (generation.current !== run) resolve(); };
+          void audio.play().catch(reject);
+        });
+        URL.revokeObjectURL(url);
+        if (currentUrl.current === url) currentUrl.current = null;
+        if (currentAudio.current === audio) currentAudio.current = null;
       }
-
+    } catch (failure) {
       if (generation.current === run) {
-        setSpeaking(false);
+        queue.current = [];
+        finishedRun.current = run;
+        setError(failure instanceof Error ? failure.message : "ভয়েস চালানো যায়নি।");
       }
-    },
-    [stop, synthesize],
-  );
+    } finally {
+      if (generation.current === run) {
+        pumping.current = false;
+        if (finishedRun.current === run && queue.current.length === 0) setSpeaking(false);
+      }
+    }
+  }, [synthesize]);
 
-  return { speak, stop, speaking, error };
+  const beginStream = useCallback(() => {
+    stop();
+    setError(null);
+    const run = generation.current;
+    queue.current = [];
+    queuedCharacters.current = 0;
+    finishedRun.current = null;
+    setSpeaking(true);
+    return run;
+  }, [stop]);
+
+  const enqueue = useCallback((raw: string, run: number) => {
+    if (generation.current !== run || !raw.trim()) return;
+    const remaining = MAX_SPEECH_CHARS - queuedCharacters.current;
+    if (remaining <= 0) return;
+    const accepted = raw.slice(0, remaining);
+    queuedCharacters.current += accepted.length;
+    queue.current.push(...prepareSpeechChunks(accepted));
+    void pump(run);
+  }, [pump]);
+
+  const finishStream = useCallback((remaining: string, run: number) => {
+    if (generation.current !== run) return;
+    const budget = MAX_SPEECH_CHARS - queuedCharacters.current;
+    if (budget > 0 && remaining.trim()) {
+      const accepted = remaining.slice(0, budget);
+      queuedCharacters.current += accepted.length;
+      queue.current.push(...prepareSpeechChunks(accepted));
+    }
+    finishedRun.current = run;
+    void pump(run);
+  }, [pump]);
+
+  const speak = useCallback(async (raw: string) => {
+    const run = beginStream();
+    finishStream(raw, run);
+  }, [beginStream, finishStream]);
+
+  return { speak, beginStream, enqueue, finishStream, stop, speaking, error };
 }
