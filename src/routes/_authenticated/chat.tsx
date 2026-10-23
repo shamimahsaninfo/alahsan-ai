@@ -557,7 +557,7 @@ function ChatPage() {
         try {
           const j = JSON.parse(d);
           if (j.stage) return pushStage(j.stage);
-          if (j.error) { const message = serviceError(j.error.status ?? j.error.code ?? 503, typeof j.error === "string" ? j.error : j.error.message ?? ""); toast.error(message); showErr(message); return; }
+          if (j.error) { const providerMessage = typeof j.error === "string" ? j.error : String(j.error.message ?? ""); const message = /[\u0980-\u09ff]/.test(providerMessage) ? providerMessage : serviceError(j.error.status ?? j.error.code ?? 503, providerMessage); toast.error(message); showErr(message); return; }
           const delta = j.choices?.[0]?.delta?.content;
           if (delta) {
             if (!wrote) { wrote = true; pushStage("write"); }

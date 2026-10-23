@@ -199,13 +199,13 @@ function AdminPage() {
             </button>
           </div>
           <p className={hint}>শুধু অ্যাডমিন দেখতে পান। Google বা OpenAI মোড বেছে নিলে এই কী ব্যবহার হবে। বিল্ট-ইন মোডে কী লাগে না।</p>
-          <label className="mt-4 block text-sm text-muted-foreground">Google Gemini API Key (ফ্রি টিয়ার সাপোর্ট)</label>
+          <div className="mt-4 flex items-center justify-between gap-2"><label className="text-sm text-muted-foreground">Google Gemini API Key (ফ্রি টিয়ার সাপোর্ট)</label><ProviderSignal provider="google" source="google_key" /></div>
           <input type={show ? "text" : "password"} value={gKey} onChange={(e) => setGKey(e.target.value)} className={`${input} mt-1`} placeholder="AIza…" />
-          <label className="mt-3 block text-sm text-muted-foreground">Groq API Key (ফ্রি ও অতি দ্রুত মডেল)</label>
+          <div className="mt-3 flex items-center justify-between gap-2"><label className="text-sm text-muted-foreground">Groq API Key (ফ্রি ও অতি দ্রুত মডেল)</label><ProviderSignal provider="groq" source="provider_main" /></div>
           <input type={show ? "text" : "password"} value={groqKey} onChange={(e) => setGroqKey(e.target.value)} className={`${input} mt-1`} placeholder="gsk_…" />
-          <label className="mt-3 block text-sm text-muted-foreground">OpenRouter API Key (ফ্রি মডেলসমূহ)</label>
+          <div className="mt-3 flex items-center justify-between gap-2"><label className="text-sm text-muted-foreground">OpenRouter API Key (ফ্রি মডেলসমূহ)</label><ProviderSignal provider="openrouter" source="provider_main" /></div>
           <input type={show ? "text" : "password"} value={orKey} onChange={(e) => setOrKey(e.target.value)} className={`${input} mt-1`} placeholder="sk-or-…" />
-          <label className="mt-3 block text-sm text-muted-foreground">OpenAI API Key (পেইড)</label>
+          <div className="mt-3 flex items-center justify-between gap-2"><label className="text-sm text-muted-foreground">OpenAI API Key (পেইড)</label><ProviderSignal provider="openai" source="openai_key" /></div>
           <input type={show ? "text" : "password"} value={oKey} onChange={(e) => setOKey(e.target.value)} className={`${input} mt-1`} placeholder="sk-…" />
         </section>
 
@@ -243,7 +243,6 @@ function AdminPage() {
         <KeyPool pool={pool} setPool={setPool} show={show} />
         <DriveMemory />
         <FatwaBank />
-        <HealthCheck />
       </div>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-4 backdrop-blur">
@@ -401,6 +400,7 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
               </select>
             </div>
             <input type={show ? "text" : "password"} value={p.key} onChange={(e) => upd(i, { key: e.target.value })} placeholder="এপিআই কী" className={input} />
+            <ProviderSignal provider={p.provider} source="pool" poolIndex={i} />
             {(p.provider === "custom" || p.provider === "ollama") && (
               <div className="flex gap-2">
                 <input
@@ -432,102 +432,19 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
   );
 }
 
-type Issue = {
-  id: string;
-  area: string;
-  title: string;
-  detail: string;
-  severity?: "critical" | "warning" | "info";
-  root_cause?: string;
-  agent_solution?: string;
-  fix?: string;
-  fixLabel?: string;
-};
-type Scan = {
-  issues: Issue[];
-  passed: string[];
-  at: string;
-  agent_summary?: string;
-  repaired?: { ok: boolean; message: string; details?: string[] };
-};
-
-function HealthCheck() {
-  const [res, setRes] = useState<Scan | null>(null);
-  const [live, setLive] = useState<string | null>(null);
-  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => {
-    supabase.from("health_checks").select("results").order("id", { ascending: false }).limit(1).maybeSingle()
-      .then(({ data }) => { const r = data?.results as any; if (r?.issues) setRes(r); });
-  }, []);
-  const run = async (fix?: string, label?: string) => {
-    setNote(null);
-    setLive(fix === "heal_all"
-      ? "নির্বাচিত নিরাপদ সেটিংস পরীক্ষা ও মেরামত হচ্ছে…"
-      : fix
-      ? `"${label}" সমস্যা মেরামত ও পুনরায় যাচাই হচ্ছে…`
-      : "সম্পূর্ণ ডায়াগনস্টিক স্ক্যান: Gemini, OpenAI, DeepSeek, ডাটাবেস, কী-পুল ও মেমরি যাচাই হচ্ছে…");
+function ProviderSignal({ provider, source, poolIndex }: { provider: string; source?: string; poolIndex?: number }) {
+  const [state, setState] = useState<"idle" | "checking" | "ok" | "error">("idle");
+  const [detail, setDetail] = useState("");
+  const check = async () => {
+    setState("checking"); setDetail("");
     try {
       const { data } = await supabase.auth.getSession();
-      const r = await fetch("/api/health", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` },
-        body: JSON.stringify(fix ? { fix } : {}),
-      });
-      if (!r.ok) throw new Error(await r.text());
-      const j: Scan = await r.json();
-      setRes(j);
-      if (fix) {
-        const still = j.issues.some((i) => i.fix === fix || (fix === "heal_all" && i.severity === "critical"));
-        setNote({
-          ok: !!j.repaired?.ok && !still,
-          text: `${j.repaired?.message ?? ""}${still ? " — কিন্তু কিছু সমস্যা এখনো রয়ে গেছে; নিচের Root Cause পড়ুন" : " — পুনরায় স্ক্যান করে যাচাই করা হয়েছে"}`,
-        });
-      } else {
-        setNote({ ok: j.issues.length === 0, text: j.agent_summary || (j.issues.length ? `${j.issues.length}টি সমস্যা পাওয়া গেছে` : "সব সচল") });
-      }
-    } catch (e: any) {
-      setNote({ ok: false, text: e?.message || "স্ক্যান ব্যর্থ হয়েছে" });
-    }
-    setLive(null);
+      const r = await fetch("/api/provider-signal", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` }, body: JSON.stringify({ provider, source, poolIndex }) });
+      const result = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(result.message || "স্ট্যাটাস যাচাই করা যায়নি");
+      setState(result.ok ? "ok" : "error"); setDetail(result.message || (result.ok ? "সার্ভার সাড়া দিয়েছে" : "সাড়া পাওয়া যায়নি"));
+    } catch (e) { setState("error"); setDetail(e instanceof Error ? e.message : "সংযোগ পরীক্ষা ব্যর্থ"); }
   };
-  const critical = res?.issues.some((i) => i.severity === "critical");
-  return (
-    <section className="mt-6 rounded-2xl border border-border bg-card/80 p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="font-display text-xl text-primary">৯. মেগা ডায়াগনস্টিক সেন্টার</h2>
-          <p className="mt-1 text-xs text-muted-foreground">বিভিন্ন এপিআই-এর লাইভ পরীক্ষা, সম্ভাব্য মূল কারণ, সীমিত নিরাপদ মেরামত ও মেরামতের পর পুনরায় যাচাই। সব ধরনের সমস্যা নিজে সমাধানের নিশ্চয়তা নয়।</p>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <button type="button" onClick={() => run()} disabled={!!live} className="rounded-lg border border-primary px-4 py-2 text-sm text-primary disabled:opacity-60">ডায়াগনসিস স্ক্যান</button>
-          <button type="button" onClick={() => run("heal_all", "সব সমস্যা")} disabled={!!live} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">🔧 নিরাপদ Auto-Repair</button>
-        </div>
-      </div>
-      <p className="mt-2 text-xs text-muted-foreground">{res ? `সর্বশেষ স্ক্যান: ${new Date(res.at).toLocaleString("bn-BD")}` : "এখনো স্ক্যান হয়নি।"}</p>
-      {live && <p className="live-status mt-3 text-sm">{live}</p>}
-      {res?.agent_summary && !live && <p className="mt-3 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm">{res.agent_summary}</p>}
-      {note && !live && <p className={`mt-2 text-sm ${note.ok ? "text-primary" : "text-destructive"}`}>{note.text}</p>}
-      {res && res.issues.length === 0 && <p className="mt-3 rounded-lg border border-primary/40 px-3 py-2 text-sm text-primary">✅ কোনো সক্রিয় সমস্যা নেই — এপিআই, ব্যাকআপ কী ও সিস্টেম সচল।</p>}
-      <ul className="mt-3 space-y-2">
-        {res?.issues.map((c) => (
-          <li key={c.id} className={`rounded-lg border px-3 py-3 text-sm ${c.severity === "critical" ? "border-destructive/50 bg-destructive/5" : "border-border"}`}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <span className="min-w-0">
-                <span className={c.severity === "critical" ? "text-destructive" : "text-primary"}>{c.area}:</span> <b>{c.title}</b>
-                <span className="ml-2 rounded-full border px-2 py-0.5 text-[10px]">{c.severity === "critical" ? "গুরুতর" : c.severity === "warning" ? "সতর্কতা" : "তথ্য"}</span>
-                <br /><span className="mt-1 block text-xs text-muted-foreground">প্রযুক্তিগত বিবরণ: {c.detail}</span>
-                {c.root_cause && <span className="mt-1 block text-xs"><b>চিহ্নিত মূল কারণ:</b> {c.root_cause}</span>}
-                {c.agent_solution && <span className="mt-1 block text-xs text-primary"><b>এআই এজেন্টের প্রস্তাব:</b> {c.agent_solution}</span>}
-              </span>
-              {c.fix ? (
-                <button type="button" onClick={() => run(c.fix, c.title)} disabled={!!live} className="shrink-0 self-start rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-60">{c.fixLabel || "মেরামত করুন"}</button>
-              ) : <span className="shrink-0 text-xs text-muted-foreground">নিজে যাচাই/সমাধান দরকার</span>}
-            </div>
-          </li>
-        ))}
-      </ul>
-      {res && res.passed.length > 0 && <details className="mt-3 text-xs text-muted-foreground"><summary className="cursor-pointer">সফল যাচাই ({res.passed.length}) দেখুন</summary><p className="mt-2 leading-6">{res.passed.join(" · ")}</p></details>}
-      <p className="mt-3 text-[11px] text-muted-foreground">নিরাপত্তার জন্য AI Agent কোনো API Key তৈরি বা পরিবর্তন করে না, বিলিং/কোটা ঠিক করতে পারে না এবং কোড নিজে প্রকাশ করে না। এটি কেবল যাচাইকৃত সেটিংস/প্রোভাইডার পরিবর্তন করে; গোপন তথ্য কখনো স্ক্যানে দেখানো হয় না।</p>
-    </section>
-  );
+  const color = state === "ok" ? "text-green-600" : state === "error" ? "text-destructive" : "text-muted-foreground";
+  return <span className="inline-flex items-center gap-2 text-xs"><button type="button" onClick={check} disabled={state === "checking"} className="rounded-md border border-border px-2 py-1 disabled:opacity-50">{state === "checking" ? "সিগন্যাল পরীক্ষা…" : "সিগন্যাল পরীক্ষা"}</button>{state !== "idle" && <span className={color} role="status">{state === "checking" ? "⟳" : state === "ok" ? "●" : "●"} {detail}</span>}</span>;
 }

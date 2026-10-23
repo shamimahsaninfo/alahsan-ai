@@ -19,9 +19,9 @@ import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/c
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedSalatRouteImport } from './routes/_authenticated/salat'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
-import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiMemoryRouteImport } from './routes/api/memory'
 import { Route as ApiPagesRouteImport } from './routes/api/pages'
+import { Route as ApiProviderSignalRouteImport } from './routes/api/provider-signal'
 import { Route as ApiSettingsRouteImport } from './routes/api/settings'
 import { Route as ImgSplatRouteImport } from './routes/img.$'
 import { Route as PIdRouteImport } from './routes/p/$id'
@@ -75,11 +75,6 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiHealthRoute = ApiHealthRouteImport.update({
-  id: '/api/health',
-  path: '/api/health',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiMemoryRoute = ApiMemoryRouteImport.update({
   id: '/api/memory',
   path: '/api/memory',
@@ -88,6 +83,11 @@ const ApiMemoryRoute = ApiMemoryRouteImport.update({
 const ApiPagesRoute = ApiPagesRouteImport.update({
   id: '/api/pages',
   path: '/api/pages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiProviderSignalRoute = ApiProviderSignalRouteImport.update({
+  id: '/api/provider-signal',
+  path: '/api/provider-signal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSettingsRoute = ApiSettingsRouteImport.update({
@@ -116,9 +116,9 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AuthenticatedProfileRoute
   '/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/health': typeof ApiHealthRoute
   '/api/memory': typeof ApiMemoryRoute
   '/api/pages': typeof ApiPagesRoute
+  '/api/provider-signal': typeof ApiProviderSignalRoute
   '/api/settings': typeof ApiSettingsRoute
   '/img/$': typeof ImgSplatRoute
   '/p/$id': typeof PIdRoute
@@ -133,9 +133,9 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileRoute
   '/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/health': typeof ApiHealthRoute
   '/api/memory': typeof ApiMemoryRoute
   '/api/pages': typeof ApiPagesRoute
+  '/api/provider-signal': typeof ApiProviderSignalRoute
   '/api/settings': typeof ApiSettingsRoute
   '/img/$': typeof ImgSplatRoute
   '/p/$id': typeof PIdRoute
@@ -152,9 +152,9 @@ export interface FileRoutesById {
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/health': typeof ApiHealthRoute
   '/api/memory': typeof ApiMemoryRoute
   '/api/pages': typeof ApiPagesRoute
+  '/api/provider-signal': typeof ApiProviderSignalRoute
   '/api/settings': typeof ApiSettingsRoute
   '/img/$': typeof ImgSplatRoute
   '/p/$id': typeof PIdRoute
@@ -171,9 +171,9 @@ export interface FileRouteTypes {
     | '/profile'
     | '/salat'
     | '/api/chat'
-    | '/api/health'
     | '/api/memory'
     | '/api/pages'
+    | '/api/provider-signal'
     | '/api/settings'
     | '/img/$'
     | '/p/$id'
@@ -188,9 +188,9 @@ export interface FileRouteTypes {
     | '/profile'
     | '/salat'
     | '/api/chat'
-    | '/api/health'
     | '/api/memory'
     | '/api/pages'
+    | '/api/provider-signal'
     | '/api/settings'
     | '/img/$'
     | '/p/$id'
@@ -206,9 +206,9 @@ export interface FileRouteTypes {
     | '/_authenticated/profile'
     | '/_authenticated/salat'
     | '/api/chat'
-    | '/api/health'
     | '/api/memory'
     | '/api/pages'
+    | '/api/provider-signal'
     | '/api/settings'
     | '/img/$'
     | '/p/$id'
@@ -221,9 +221,9 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiChatRoute: typeof ApiChatRoute
-  ApiHealthRoute: typeof ApiHealthRoute
   ApiMemoryRoute: typeof ApiMemoryRoute
   ApiPagesRoute: typeof ApiPagesRoute
+  ApiProviderSignalRoute: typeof ApiProviderSignalRoute
   ApiSettingsRoute: typeof ApiSettingsRoute
   ImgSplatRoute: typeof ImgSplatRoute
   PIdRoute: typeof PIdRoute
@@ -301,13 +301,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/health': {
-      id: '/api/health'
-      path: '/api/health'
-      fullPath: '/api/health'
-      preLoaderRoute: typeof ApiHealthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/memory': {
       id: '/api/memory'
       path: '/api/memory'
@@ -320,6 +313,13 @@ declare module '@tanstack/react-router' {
       path: '/api/pages'
       fullPath: '/api/pages'
       preLoaderRoute: typeof ApiPagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/provider-signal': {
+      id: '/api/provider-signal'
+      path: '/api/provider-signal'
+      fullPath: '/api/provider-signal'
+      preLoaderRoute: typeof ApiProviderSignalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/settings': {
@@ -370,9 +370,9 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ApiChatRoute: ApiChatRoute,
-  ApiHealthRoute: ApiHealthRoute,
   ApiMemoryRoute: ApiMemoryRoute,
   ApiPagesRoute: ApiPagesRoute,
+  ApiProviderSignalRoute: ApiProviderSignalRoute,
   ApiSettingsRoute: ApiSettingsRoute,
   ImgSplatRoute: ImgSplatRoute,
   PIdRoute: PIdRoute,
