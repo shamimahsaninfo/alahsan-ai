@@ -690,7 +690,7 @@ async function readUrls(text: string): Promise<string> {
 
 const enc = new TextEncoder();
 const sse = (o: unknown) => enc.encode(`data: ${JSON.stringify(o)}\n\n`);
-const SSE_HEADERS = { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" };
+const SSE_HEADERS = { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no" };
 
 function withStages(stages: string[], upstream: ReadableStream<Uint8Array>): Response {
   const r = upstream.getReader();
@@ -703,14 +703,34 @@ function withStages(stages: string[], upstream: ReadableStream<Uint8Array>): Res
   const body = new ReadableStream<Uint8Array>({
     async start(c) {
       for (const st of stages) push(c, sse({ stage: st }));
+      let lastDataAt = Date.now();
+      let readPromise = r.read();
       try {
         while (!closed) {
-          const { done, value } = await r.read();
-          if (done) break;
-          push(c, value);
+          let heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
+          const next = await Promise.race([
+            readPromise.then((result) => ({ kind: "read" as const, result })),
+            new Promise<{ kind: "heartbeat" }>((resolve) => { heartbeatTimer = setTimeout(() => resolve({ kind: "heartbeat" }), 12000); }),
+          ]);
+          if (heartbeatTimer) clearTimeout(heartbeatTimer);
+          if (next.kind === "heartbeat") {
+            if (Date.now() - lastDataAt >= 60000) {
+              push(c, sse({ error: { status: 504, message: "এআই সেবা ৬০ সেকেন্ড ধরে নতুন উত্তর পাঠায়নি; সংযোগ থামানো হয়েছে।" } }));
+              push(c, enc.encode("data: [DONE]\n\n"));
+              await r.cancel().catch(() => {});
+              break;
+            }
+            push(c, enc.encode(": keep-alive\n\n"));
+            continue;
+          }
+          if (next.result.done) break;
+          lastDataAt = Date.now();
+          push(c, next.result.value);
+          readPromise = r.read();
         }
       } catch {
-        push(c, sse({ error: "সংযোগ মাঝপথে বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।" }));
+        push(c, sse({ error: { status: 502, message: "সংযোগ মাঝপথে বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।" } }));
+        push(c, enc.encode("data: [DONE]\n\n"));
       }
       if (!closed) { closed = true; try { c.close(); } catch { /* already closed */ } }
     },
