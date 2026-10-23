@@ -16,7 +16,7 @@ export const synthesizeGeminiSpeech = createServerFn({ method: "POST" })
     if (roleError) throw new Error("প্রবেশাধিকার যাচাই করা যায়নি। আবার লগইন করুন।");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [{ data: keys, error: keyError }, { data: settings, error: settingsError }, { count: hourly }, { count: daily }] = await Promise.all([
-      supabaseAdmin.from("ai_keys").select("google_key").eq("id", 1).maybeSingle(),
+      supabaseAdmin.from("ai_keys").select("google_key,key_pool").eq("id", 1).maybeSingle(),
       supabaseAdmin.from("ai_settings").select("chat_enabled,hourly_limit,daily_limit").eq("id", 1).maybeSingle(),
       supabase.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", new Date(Date.now() - 3600_000).toISOString()),
       supabase.from("chat_usage").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", new Date(Date.now() - 86400_000).toISOString()),
@@ -24,7 +24,10 @@ export const synthesizeGeminiSpeech = createServerFn({ method: "POST" })
     if (keyError || settingsError) throw new Error("ভয়েস সেটিংস যাচাই করা যায়নি।");
     if (!settings?.chat_enabled) throw new Error("চ্যাট ও ভয়েস সেবা আপাতত বন্ধ আছে।");
     if (!isAdmin && ((hourly ?? 0) >= settings.hourly_limit || (daily ?? 0) >= settings.daily_limit)) throw new Error("আপনার অ্যাকাউন্টের ব্যবহারের সীমা শেষ হয়েছে।");
-    const key = keys?.google_key?.trim();
+    type PoolKey = { name?: string; provider?: string; key?: string; active?: boolean };
+    const rawPool = (Array.isArray((keys as { key_pool?: unknown })?.key_pool) ? (keys as { key_pool: PoolKey[] }).key_pool : [])
+      .filter((p) => p && p.active !== false && p.key?.trim());
+    const key = keys?.google_key?.trim() || rawPool.find((p) => p.provider === "google")?.key?.trim() || process.env["GOOGLE_API_KEY"];
     if (!key) throw new Error("অ্যাডমিন প্যানেলে Google Gemini API Key সংরক্ষণ করুন।");
     try {
       const ai = new GoogleGenAI({ apiKey: key });
