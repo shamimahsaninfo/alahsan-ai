@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Save, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/admin";
-import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, DEEPSEEK_MODELS, GROQ_MODELS, OPENROUTER_MODELS, OLLAMA_MODELS, CLAUDE_MODELS, type Provider } from "@/lib/models";
+import { GOOGLE_MODELS, OPENAI_MODELS, GROQ_MODELS, OPENROUTER_MODELS, type Provider } from "@/lib/models";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -44,7 +44,7 @@ function AdminPage() {
     supabase.from("ai_settings").select("*").eq("id", 1).maybeSingle().then(({ data, error }) => {
       if (data) return setS(data as unknown as S);
       setStatus(error ? `সেটিংস আনা যায়নি: ${error.message}` : "");
-      setS({ admin_note: "", system_prompt: "", provider: "lovable", model: "", hourly_limit: 30, daily_limit: 200, reasoning_effort: "low", welcome_title: "", welcome_subtitle: "", suggestions: "", url_reader: true, site_builder: true, chat_enabled: true });
+      setS({ admin_note: "", system_prompt: "", provider: "google", model: "", hourly_limit: 30, daily_limit: 200, reasoning_effort: "low", welcome_title: "", welcome_subtitle: "", suggestions: "", url_reader: true, site_builder: true, chat_enabled: true });
     });
     supabase.from("ai_keys").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
       if (data) {
@@ -73,15 +73,12 @@ function AdminPage() {
   if (!s) return <div className="min-h-screen bg-background p-8 text-muted-foreground">লোড হচ্ছে…</div>;
 
   const set = <K extends keyof S>(k: K, v: S[K]) => setS({ ...s, [k]: v });
-  const listFor = (p: Provider) => {
+  const listFor = (p: Provider): { id: string; label: string }[] => {
     if (p === "google") return GOOGLE_MODELS;
-    if (p === "claude") return CLAUDE_MODELS;
-    if (p === "openai") return OPENAI_MODELS;
-    if (p === "deepseek") return DEEPSEEK_MODELS;
     if (p === "groq") return GROQ_MODELS;
     if (p === "openrouter") return OPENROUTER_MODELS;
-    if (p === "ollama") return OLLAMA_MODELS;
-    return LOVABLE_MODELS;
+    if (p === "openai") return OPENAI_MODELS;
+    return GOOGLE_MODELS;
   };
   const models = listFor(s.provider);
 
@@ -99,7 +96,7 @@ function AdminPage() {
     if (orKey.trim()) extraPool.push({ name: "OpenRouter Main", provider: "openrouter", key: orKey.trim(), active: true });
     const seen = new Set([gKey.trim(), oKey.trim(), groqKey.trim(), orKey.trim()].filter(Boolean));
     const cleanUserPool = pool
-      .filter((p) => p.key.trim() || p.provider === "ollama")
+      .filter((p) => p.key.trim())
       .map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
       .filter((p) => (p.key ? (seen.has(p.key) ? false : (seen.add(p.key), true)) : true))
       .slice(0, 5);
@@ -155,14 +152,10 @@ function AdminPage() {
           <h2 className={h2}>৩. এআই মোড, মডেল ও চিন্তার গভীরতা</h2>
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
             {([
-              ["lovable", "বিল্ট-ইন (GPT/Gemini)"],
-              ["claude", "Claude (Lovable AI)"],
-              ["google", "Google Gemini"],
+              ["google", "Google Gemini (ফ্রি/পেইড)"],
               ["groq", "Groq (ফ্রি ও অতি দ্রুত)"],
               ["openrouter", "OpenRouter (ফ্রি মডেলসমূহ)"],
-              ["deepseek", "DeepSeek API"],
-              ["openai", "OpenAI"],
-              ["ollama", "Ollama (লোকাল/সার্ভার)"],
+              ["openai", "OpenAI (GPT)"],
             ] as const).map(([p, l]) => (
               <button
                 key={p}
@@ -373,7 +366,7 @@ function FatwaBank() {
 }
 
 
-type PoolKey = { name: string; provider: "google" | "openai" | "deepseek" | "groq" | "openrouter" | "ollama" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
+type PoolKey = { name: string; provider: "google" | "groq" | "openrouter" | "openai"; key: string; base_url?: string; model?: string; active: boolean };
 
 function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean }) {
   const input = "w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary";
@@ -382,7 +375,7 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
     <section className="mt-6 rounded-2xl border border-border bg-card/80 p-6">
       <h2 className="font-display text-xl text-primary">৪ক. সেকেন্ডারি ব্যাকআপ ও অতিরিক্ত ইঞ্জিন পুল (Backup & Extra Engines, সর্বোচ্চ ৫টি)</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        সর্বোচ্চ ৫টি অতিরিক্ত কী বা মডেল রাখা যায়। মূল কী শেষ হলে এআই স্বয়ংক্রিয়ভাবে তালিকার পরের কী দিয়ে চেষ্টা করবে। এছাড়াও DeepSeek, Ollama বা নিজস্ব GPU সার্ভারের OpenAI-compatible API এখানে যুক্ত করতে পারেন (Ollama-তে API key ঐচ্ছিক)। যোগ করার পর নিচে "সংরক্ষণ করুন" চাপুন।
+        সর্বোচ্চ ৫টি অতিরিক্ত ব্যাকআপ কী বা মডেল রাখা যায় (Google Gemini, Groq, OpenRouter বা OpenAI)। মূল কী-তে কোটা বা রেট লিমিট শেষ হলে এআই স্বয়ংক্রিয়ভাবে তালিকার পরের সচল ব্যাকআপ দিয়ে উত্তর দেবে। যোগ করার পর নিচে "সংরক্ষণ করুন" চাপুন।
       </p>
       <div className="mt-4 space-y-3">
         {pool.map((p, i) => (
@@ -393,30 +386,12 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
                 <option value="google">Google Gemini</option>
                 <option value="groq">Groq (ফ্রি)</option>
                 <option value="openrouter">OpenRouter (ফ্রি)</option>
-                <option value="deepseek">DeepSeek</option>
                 <option value="openai">OpenAI</option>
-                <option value="ollama">Ollama</option>
-                <option value="custom">অন্য সেবা</option>
               </select>
             </div>
             <input type={show ? "text" : "password"} value={p.key} onChange={(e) => upd(i, { key: e.target.value })} placeholder="এপিআই কী" className={input} />
             <ProviderSignal provider={p.provider} source="pool" poolIndex={i} />
-            {(p.provider === "custom" || p.provider === "ollama") && (
-              <div className="flex gap-2">
-                <input
-                  value={p.base_url ?? ""}
-                  onChange={(e) => upd(i, { base_url: e.target.value })}
-                  placeholder={p.provider === "ollama" ? "সার্ভারে পৌঁছানো যায় এমন HTTPS Ollama URL" : "ঠিকানা, যেমন https://api.groq.com/openai/v1"}
-                  className={input}
-                />
-                <input
-                  value={p.model ?? ""}
-                  onChange={(e) => upd(i, { model: e.target.value })}
-                  placeholder={p.provider === "ollama" ? "মডেল (যেমন: deepseek-r1:latest)" : "মডেলের নাম"}
-                  className={input}
-                />
-              </div>
-            )}
+
             <div className="flex items-center justify-between text-sm">
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={p.active} onChange={(e) => upd(i, { active: e.target.checked })} /> চালু

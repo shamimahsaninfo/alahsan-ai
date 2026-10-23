@@ -8,14 +8,12 @@ const CHAT_ENDPOINTS: Record<string, string> = {
   groq: "https://api.groq.com/openai/v1/chat/completions",
   openrouter: "https://openrouter.ai/api/v1/chat/completions",
   openai: "https://api.openai.com/v1/chat/completions",
-  deepseek: "https://api.deepseek.com/chat/completions",
 };
 const DEFAULT_MODELS: Record<string, string> = {
   google: "gemini-3.8-flash",
   groq: "llama-3.3-70b-versatile",
   openrouter: "openrouter/free",
   openai: "gpt-4o-mini",
-  deepseek: "deepseek-chat",
 };
 
 export const Route = createFileRoute("/api/provider-signal")({
