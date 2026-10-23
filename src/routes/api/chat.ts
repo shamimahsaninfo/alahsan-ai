@@ -384,14 +384,12 @@ async function handleChat(request: Request): Promise<Response> {
           if (remainingBudget <= 0) break;
           const perAttemptTimeout = Math.min(a.label === "primary" ? 7000 : 3500, remainingBudget);
           const timer = setTimeout(() => ac.abort(), perAttemptTimeout);
-          // Provider-specific payload: avoid OpenAI-only params on Gemini, DeepSeek,
-          // Ollama and custom OpenAI-compatible services.
+          // Provider-specific payload: avoid OpenAI-only params on Gemini, Groq, and OpenRouter
           const attemptIsOpenAI = a.url.includes("api.openai.com");
           const attemptIsGroqOSS = a.url.includes("api.groq.com") && a.model.startsWith("openai/gpt-oss-");
           const attemptIsReasoning = (attemptIsOpenAI && (/^(o1|o3|o4)/i.test(a.model) || /^gpt-6/i.test(a.model))) || attemptIsGroqOSS;
           let attemptModel = a.model;
           if (a.provider === "openai" && (!/^gpt-|^o[134]/i.test(attemptModel))) attemptModel = "gpt-6-astra";
-          if (a.provider === "deepseek" && !/^deepseek-/.test(attemptModel)) attemptModel = "deepseek-flash";
           if (a.provider === "google" && !/^gemini-/.test(attemptModel)) attemptModel = "gemini-3.8-flash";
           const attemptBody: Record<string, unknown> = {
             model: attemptModel,
