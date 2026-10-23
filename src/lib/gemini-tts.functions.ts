@@ -30,9 +30,20 @@ export const synthesizeGeminiSpeech = createServerFn({ method: "POST" })
       const ai = new GoogleGenAI({ apiKey: key });
       const interaction = await ai.interactions.create({
         model: "gemini-3.8-flash-tts",
-        input: [{ type: "text", text: data.text, annotations: [{ type: "speech_metadata", style: "natural, warm, clear Bangladeshi Bengali; conversational and unhurried" }] }],
+        input: [
+          {
+            type: "text",
+            text: data.text,
+            annotations: [
+              {
+                type: "speech_metadata",
+                style: "conversational, warm, natural and polite Bangladeshi Bengali male speaker with standard pronunciation and clear articulation",
+              },
+            ],
+          },
+        ],
         response_format: { type: "audio" },
-        generation_config: { speech_config: [{ voice: "Kore" }] },
+        generation_config: { speech_config: [{ voice: "Fenrir" }] },
       });
       const audio = interaction.output_audio;
       if (!audio?.data || audio.mime_type !== "audio/wav") throw new Error("Gemini থেকে অডিও পাওয়া যায়নি।");
