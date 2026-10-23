@@ -1,6 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { withStorageShim } from "@/lib/page-shim";
 import { useEffect, useRef, useState } from "react";
+import { useGeminiTts } from "@/hooks/use-gemini-tts";
+import { transcribeVoiceInput } from "@/lib/transcribe-voice.functions";
+import { blobToBase64 } from "@/lib/speech-audio";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 const urlT = (u: string) => (u.startsWith("data:image/") ? u : defaultUrlTransform(u));
 import remarkGfm from "remark-gfm";
@@ -246,56 +250,6 @@ function stripEmoji(t: string): string {
   return t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "");
 }
 
-// বাংলা ভয়েস না থাকলে হিন্দি/ইংরেজি টানে বিকৃত উচ্চারণ নয় — undefined ফেরত দেয়
-function pickVoice(bn: boolean): SpeechSynthesisVoice | undefined {
-  const all = window.speechSynthesis.getVoices();
-  if (bn) return all.find((x) => /^bn[-_]BD/i.test(x.lang)) || all.find((x) => /^bn/i.test(x.lang));
-  return all.find((x) => /^en/i.test(x.lang));
-}
-const NO_BN_VOICE = "আপনার ডিভাইসে বাংলা ভয়েস প্যাক নেই। ফোনের Settings > Google > Text-to-speech (বা Language & input) থেকে বাংলা ভয়েস ডাউনলোড ও চালু করুন।";
-
-// বাক্যভিত্তিক ছোট টুকরোয় পড়া — লম্বা লেখা একবারে দিলে অনেক ব্রাউজারে ভয়েস থেমে যায়
-function speak(text: string) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  const synth = window.speechSynthesis;
-  synth.cancel();
-  const clean = stripEmoji(text)
-    .replace(/```[\s\S]*?(```|$)/g, " কোড অংশ। ")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/https?:\/\/\S+/g, " ")
-    .replace(/[#*`_>|~]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 6000);
-  if (!clean) return;
-  const parts = clean.match(/[^।.!?\n]+[।.!?]?/g) || [clean];
-  const chunks: string[] = [];
-  let cur = "";
-  for (const p of parts) {
-    if ((cur + p).length > 180 && cur) { chunks.push(cur); cur = p; } else cur += p;
-  }
-  if (cur.trim()) chunks.push(cur);
-  const run = () => {
-    if (/[\u0980-\u09FF]/.test(clean) && !pickVoice(true)) { alert(NO_BN_VOICE); return; }
-    chunks.forEach((c) => {
-      const u = new SpeechSynthesisUtterance(c.trim());
-      const bn = /[\u0980-\u09FF]/.test(c);
-      u.lang = bn ? "bn-BD" : "en-US";
-      const v = pickVoice(bn);
-      if (v) u.voice = v;
-      u.rate = 1;
-      synth.speak(u);
-    });
-  };
-  if (synth.getVoices().length) run();
-  else {
-    let done = false;
-    const go = () => { if (!done) { done = true; run(); } };
-    synth.addEventListener("voiceschanged", go, { once: true });
-    setTimeout(go, 600);
-  }
-}
 
 function ChatPage() {
   const { user } = Route.useRouteContext();
@@ -370,18 +324,26 @@ function ChatPage() {
   const [flow, setFlow] = useState<{ stages: string[]; current: number } | null>(null);
   const pushStage = (st: string, finish = false) => setFlow((f) => { const stages = f ? (f.stages.includes(st) ? f.stages : [...f.stages, st]) : [st]; return { stages, current: finish ? stages.length : stages.indexOf(st) }; });
   const [voiceOut, setVoiceOut] = useState(false);
+  const geminiTts = useGeminiTts();
+  const transcribe = useServerFn(transcribeVoiceInput);
   const [dark, setDark] = useState(false);
   useEffect(() => { const d = localStorage.getItem("theme") === "dark"; setDark(d); document.documentElement.classList.toggle("dark", d); }, []);
   const toggleDark = () => { const d = !dark; setDark(d); document.documentElement.classList.toggle("dark", d); localStorage.setItem("theme", d ? "dark" : "light"); };
   useEffect(() => { siteSlugRef.current = customSlug.trim() || (active ? `site-${String(active).slice(0, 8)}` : ""); }, [customSlug, active]);
   const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [sidebar, setSidebar] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [camOpen, setCamOpen] = useState(false);
   const [cfg, setCfg] = useState<{ welcome_title?: string; welcome_subtitle?: string; suggestions?: string }>({});
   const [speaking, setSpeaking] = useState<number | null>(null);
+  useEffect(() => { if (!geminiTts.speaking) setSpeaking(null); }, [geminiTts.speaking]);
+  useEffect(() => { if (geminiTts.error) toast.error(geminiTts.error); }, [geminiTts.error]);
   useEffect(() => { fetch("/api/settings").then((r) => r.json()).then(setCfg).catch(() => {}); }, []);
   const recRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -458,32 +420,60 @@ function ChatPage() {
     }
   };
 
-  const toggleMic = () => {
-    const KB_HELP = "এই অ্যাপে সরাসরি মাইক চালু করা যাচ্ছে না। সহজ উপায়: লেখার ঘরে চাপ দিন, তারপর কিবোর্ডের মাইক (🎤) বোতাম চেপে বাংলায় বলুন — কিবোর্ড নিজেই লিখে দেবে। (Gboard-এ ভাষা হিসেবে বাংলা যোগ করে নিন।)";
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const isWebView = /; wv\)|AppsGeyser|WebView/i.test(navigator.userAgent);
-    if (!SR) return alert(KB_HELP);
-    if (listening) return recRef.current?.stop();
-    let rec: any;
-    try { rec = new SR(); } catch { return alert(KB_HELP); }
-    rec.lang = "bn-BD";
-    rec.interimResults = true;
-    rec.continuous = false;
-    const base = input;
-    rec.onresult = (e: any) => {
-      let t = "";
-      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-      setInput((base ? base + " " : "") + t);
-    };
-    rec.onend = () => setListening(false);
-    rec.onerror = (e: any) => {
-      setListening(false);
-      if (e?.error === "service-not-allowed" || (isWebView && e?.error === "not-allowed") || e?.error === "network" || e?.error === "audio-capture") alert(KB_HELP);
-      else if (e?.error === "not-allowed") alert("মাইক্রোফোনের অনুমতি দিন: ব্রাউজারের ঠিকানার পাশে 🔒 চিহ্নে চাপ দিয়ে Microphone চালু করুন। না হলে কিবোর্ডের মাইক বোতাম ব্যবহার করুন।");
-      else if (e?.error === "no-speech") alert("কোনো কথা শোনা যায়নি, আবার চেষ্টা করুন।");
-    };
-    recRef.current = rec;
-    try { rec.start(); setListening(true); } catch { setListening(false); alert(KB_HELP); }
+  const toggleMic = async () => {
+    if (listening) {
+      if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
+      if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+      else recRef.current?.stop();
+      return;
+    }
+    if (transcribing) return;
+    const KB_HELP = "এই ব্রাউজারে সরাসরি মাইক চালু করা যাচ্ছে না। লেখার ঘরে চাপ দিয়ে কিবোর্ডের মাইক ব্যবহার করুন; Gboard-এ বাংলা ভাষা যোগ করে নিন।";
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SR) return alert(KB_HELP);
+      try {
+        const rec = new SR(); rec.lang = "bn-BD"; rec.interimResults = true; rec.continuous = false;
+        const base = input;
+        rec.onresult = (event: any) => {
+          let text = "";
+          for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript;
+          setInput((base ? `${base} ` : "") + text);
+        };
+        rec.onend = () => setListening(false);
+        rec.onerror = (event: any) => { setListening(false); if (event?.error === "not-allowed") alert("মাইক্রোফোনের অনুমতি দিন, অথবা কিবোর্ডের মাইক ব্যবহার করুন।"); else if (event?.error === "no-speech") alert("কোনো কথা শোনা যায়নি, আবার চেষ্টা করুন।"); };
+        recRef.current = rec; rec.start(); setListening(true);
+      } catch { alert(KB_HELP); }
+      return;
+    }
+    let stream: MediaStream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+    catch { alert("মাইক্রোফোনের অনুমতি দিন এবং আবার চেষ্টা করুন।"); return; }
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", "audio/ogg"];
+    const mimeType = candidates.find((type) => MediaRecorder.isTypeSupported(type));
+    if (!mimeType) { stream.getTracks().forEach((track) => track.stop()); return alert(KB_HELP); }
+    try {
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder; recordingChunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) recordingChunksRef.current.push(event.data); };
+      recorder.onerror = () => { stream.getTracks().forEach((track) => track.stop()); setListening(false); alert("অডিও রেকর্ড করা যায়নি। আবার চেষ্টা করুন।"); };
+      recorder.onstop = async () => {
+        if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
+        recordingTimeoutRef.current = null;
+        stream.getTracks().forEach((track) => track.stop());
+        mediaRecorderRef.current = null; setListening(false);
+        const blob = new Blob(recordingChunksRef.current, { type: mimeType }); recordingChunksRef.current = [];
+        if (!blob.size) return alert("কোনো কথা রেকর্ড হয়নি। আবার চেষ্টা করুন।");
+        setTranscribing(true);
+        try {
+          const { transcript } = await transcribe({ data: { audioBase64: await blobToBase64(blob), mimeType: blob.type || mimeType.split(";")[0]! } });
+          setInput((previous) => `${previous.trim()}${previous.trim() ? " " : ""}${transcript}`);
+        } catch (error) { alert(error instanceof Error ? error.message : "কথা শনাক্ত করা যায়নি। আবার চেষ্টা করুন।"); }
+        finally { setTranscribing(false); }
+      };
+      recorder.start(); setListening(true);
+      recordingTimeoutRef.current = setTimeout(() => { if (recorder.state === "recording") recorder.stop(); }, 60_000);
+    } catch { stream.getTracks().forEach((track) => track.stop()); setListening(false); alert("রেকর্ডিং শুরু করা যায়নি।"); }
   };
     const send = async (override?: string, base?: Msg[], regen = false) => {
     const cur = base ?? msgs;
@@ -622,7 +612,7 @@ function ChatPage() {
           }
         } catch { full += "\n\nলাইভ লিংক তৈরির সময় সংযোগ বিচ্ছিন্ন হয়েছে।"; setMsgs((m) => [...m.slice(0, -1), { role: "assistant", content: full }]); }
       }
-      if (voiceOut) speak(full);
+      if (voiceOut) void geminiTts.speak(full);
       await supabase.from("messages").insert({ conversation_id: convId, role: "assistant", content: full, user_id: user.id });
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", convId);
       supabase.auth.getSession().then(({ data: s3 }) =>
@@ -763,7 +753,7 @@ function ChatPage() {
           </Popover>
           <button onClick={toggleDark} className="rounded-full border border-border p-1.5 text-muted-foreground hover:text-primary" aria-label="ডার্ক মোড" title="ডার্ক / লাইট মোড">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
           <button
-            onClick={() => { setVoiceOut(!voiceOut); window.speechSynthesis?.cancel(); }}
+            onClick={() => { setVoiceOut(!voiceOut); geminiTts.stop(); }}
             className={`flex items-center gap-1 rounded-full border px-3 py-1 text-sm ${voiceOut ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
           >
             {voiceOut ? <Volume2 size={16} /> : <VolumeX size={16} />} <span className="hidden sm:inline">ভয়েস উত্তর</span>
@@ -817,7 +807,7 @@ function ChatPage() {
                           <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlT} components={streamingNow ? mdStreaming : mdDone}>{body}</ReactMarkdown>
                           <div className="mt-1 flex flex-wrap gap-3 text-muted-foreground">
                             <button onClick={() => copy(body, i)} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="কপি">{copied === i ? <Check size={15} /> : <Copy size={15} />}{copied === i ? "কপি হয়েছে" : "কপি"}</button>
-                            <button onClick={() => { if (speaking === i) { window.speechSynthesis?.cancel(); setSpeaking(null); } else { speak(body); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
+                            <button onClick={() => { if (speaking === i) { geminiTts.stop(); setSpeaking(null); } else { void geminiTts.speak(body); setSpeaking(i); } }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="শুনুন">{speaking === i ? <><Square size={14} /> থামান</> : <><Volume2 size={15} /> শুনুন</>}</button>
                             {!streamingNow && <>
                               {i === msgs.length - 1 && i > 0 && msgs[i - 1]?.role === "user" && !loading && (
                                 <button onClick={() => { const prev = msgs[i - 1]!; send(prev.content, msgs.slice(0, i - 1), true); }} className="flex items-center gap-1 text-xs hover:text-primary" aria-label="আবার লিখুন"><RotateCcw size={14} /> আবার লিখুন</button>
@@ -896,15 +886,15 @@ function ChatPage() {
                 <button className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="আরও অপশন"><Plus size={22} /></button>
               </PopoverTrigger>
               <PopoverContent side="top" align="start" className="w-56 p-1">
-                <Button variant="ghost" className="w-full justify-start gap-3 px-3" disabled={loading || listening} onClick={() => { setPlusOpen(false); setCallOpen(true); }}><Phone className="text-primary" />ভয়েস কল</Button>
+                <Button variant="ghost" className="w-full justify-start gap-3 px-3" disabled={loading || listening || transcribing} onClick={() => { setPlusOpen(false); setCallOpen(true); }}><Phone className="text-primary" />ভয়েস কল</Button>
                 {[
                   { icon: <Camera size={18} />, label: "সরাসরি ক্যামেরা", run: () => setCamOpen(true) },
                   { icon: <ImagePlus size={18} />, label: "ছবি যুক্ত করুন", run: () => fileRef.current?.click() },
                   { icon: <Paperclip size={18} />, label: "PDF / ফাইল", run: () => docRef.current?.click() },
-                  { icon: listening ? <MicOff size={18} /> : <Mic size={18} />, label: listening ? "ভয়েস থামান" : "ভয়েসে বলুন", run: toggleMic },
+                  { icon: listening ? <MicOff size={18} /> : <Mic size={18} />, label: transcribing ? "কথা ঠিক করা হচ্ছে…" : listening ? "ভয়েস থামান" : "ভয়েসে বলুন", run: toggleMic },
                   { icon: <MonitorUp size={18} />, label: "স্ক্রিন দেখান", run: () => captureFrame("screen") },
                 ].map((o) => (
-                  <button key={o.label} onClick={() => { setPlusOpen(false); o.run(); }} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-secondary">
+                  <button key={o.label} onClick={() => { setPlusOpen(false); o.run(); }} disabled={transcribing || (loading && !listening)} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-secondary disabled:opacity-50">
                     <span className="text-primary">{o.icon}</span>{o.label}
                   </button>
                 ))}
@@ -916,7 +906,7 @@ function ChatPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
               rows={1}
-              placeholder={listening ? "শুনছি…" : "আপনার প্রশ্ন লিখুন…"}
+              placeholder={transcribing ? "কথা ঠিক করা হচ্ছে…" : listening ? "শুনছি… থামাতে আবার চাপ দিন" : "আপনার প্রশ্ন লিখুন…"}
               className="max-h-48 min-w-0 flex-1 resize-none bg-transparent px-2 py-3 outline-none placeholder:text-muted-foreground"
             />
             {loading ? (
