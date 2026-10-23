@@ -33,7 +33,7 @@ const FOUNDER = "alahsanfoundation.info@gmail.com";
 const GOOGLE_CHAT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const OPENAI_CHAT = "https://api.openai.com/v1/chat/completions";
 const DEEPSEEK_CHAT = "https://api.deepseek.com/chat/completions";
-const WORKING_GOOGLE_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite"];
+const WORKING_GOOGLE_MODELS = ["gemini-3.8-flash", "gemini-3.1-flash-lite"];
 const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 const TABLES = ["ai_settings", "ai_keys", "conversations", "messages", "pages", "health_checks", "chat_usage", "user_roles", "user_memories"];
 
@@ -65,7 +65,7 @@ function classifyError(status: number, text: string) {
   const t = text.toLowerCase();
   if (status === 401) return { label: "এপিআই কী অবৈধ বা এক্সপায়ার্ড (Invalid API Key)", type: "auth" };
   if (status === 403) return { label: "অনুমতি নেই বা একাউন্ট সীমাবদ্ধ (Forbidden)", type: "permission" };
-  if (status === 429 || /rate|quota|exhausted|insufficient_quota|credit/.test(t)) {
+  if (status === 402 || status === 429 || /rate|quota|exhausted|insufficient_quota|insufficient_balance|balance|credit/.test(t)) {
     return { label: "কোটা বা ব্যালেন্স শেষ অথবা রেট লিমিট (Quota Exceeded / Rate Limit)", type: "quota" };
   }
   if (status === 404 || /model_not_found|not found|does not exist/.test(t)) {
@@ -181,7 +181,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
       return;
     }
 
-    const testModel = c.settings?.provider === "google" ? (c.settings?.model || "gemini-3.8-flash") : "gemini-2.5-flash";
+    const testModel = c.settings?.provider === "google" ? (c.settings?.model || "gemini-3.8-flash") : "gemini-3.8-flash";
     const res = await safeChatCall(GOOGLE_CHAT, key, testModel, "Test ok");
     if (res.ok) {
       c.passed.push(`Google Gemini API (${testModel} সচল ও সাড়া দিচ্ছে)`);
@@ -193,10 +193,10 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
       id: "google:failing",
       area: "Google Gemini",
       title: `Google Gemini কাজ করছে না — ${err.label}`,
-      detail: `${testModel} [HTTP ${res.status}]: ${res.text.slice(0, 160)}`,
+      detail: `${testModel} [HTTP ${res.status}]: ${res.text.slice(0, 240)}`,
       severity: "critical",
       root_cause: `Google এপিআই রেসপন্স কোড ${res.status}: ${res.text}`,
-      agent_solution: err.type === "model" ? "মডেল পরিবর্তন করে সচল gemini-2.5-flash বা gemini-3.8-flash নির্বাচন করুন।" : "API Key ও কোটা যাচাই করুন।",
+      agent_solution: err.type === "model" ? "মডেল পরিবর্তন করে সচল gemini-3.8-flash বা gemini-3.1-flash-lite নির্বাচন করুন।" : "API Key ও কোটা যাচাই করুন।",
       ...(err.type === "model" ? { fix: "switch_google_model", fixLabel: "সচল Google মডেলে পরিবর্তন করুন" } : {}),
     });
   },
@@ -274,10 +274,10 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
       id: "deepseek:failing",
       area: "DeepSeek",
       title: `DeepSeek API কাজ করছে না — ${err.label}`,
-      detail: `[HTTP ${res.status}]: ${res.text.slice(0, 160)}`,
+      detail: `[HTTP ${res.status}]: ${res.text.slice(0, 240)}`,
       severity: "critical",
       root_cause: `DeepSeek এন্ডপয়েন্ট রেসপন্স: ${res.text}`,
-      agent_solution: err.type === "quota" ? "DeepSeek অ্যাকাউন্টে টপ-আপ ব্যালেন্স যোগ করুন।" : "DeepSeek কী যাচাই করুন।",
+      agent_solution: err.type === "quota" ? "DeepSeek API-তে 402/ব্যালেন্স বা কোটা সমস্যা। DeepSeek provider dashboard-এ balance/billing ঠিক না হওয়া পর্যন্ত এটিকে primary করে উত্তর পাওয়া যাবে না; অন্য provider নির্বাচন করতে পারেন।" : err.type === "auth" ? "DeepSeek API key ভুল/অকার্যকর হতে পারে; key যাচাই করুন।" : "DeepSeek-এর উত্তর ও API status দেখে provider setting যাচাই করুন।",
       fix: "fix_deepseek",
       fixLabel: "DeepSeek মেরামত করুন",
     });
@@ -321,7 +321,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
         if (p?.active === false || (!p?.key?.trim() && p?.provider !== "ollama")) return;
 
         let url = GOOGLE_CHAT;
-        let model = p?.model?.trim() || "gemini-2.5-flash";
+        let model = p?.model?.trim() || "gemini-3.8-flash";
 
         if (p.provider === "openai") {
           url = OPENAI_CHAT;
@@ -372,7 +372,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
   async vision(c) {
     const key = c.keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
     if (!key) return;
-    const r = await safeChatCall(GOOGLE_CHAT, key, "gemini-2.5-flash", [
+    const r = await safeChatCall(GOOGLE_CHAT, key, "gemini-3.8-flash", [
       { type: "text", text: "What color? one word" },
       { type: "image_url", image_url: { url: TINY_PNG } },
     ]);
@@ -541,7 +541,7 @@ async function repair(admin: any, fix: string): Promise<string> {
     // Prefer the selected provider if its live probe succeeds; otherwise use the first verified fallback.
     candidates.sort((a, b) => Number(b.provider === s?.provider) - Number(a.provider === s?.provider));
     for (const c of candidates) {
-      const result = await safeChatCall(c.url, c.key, c.model, "Reply with OK.");
+      const result = await safeChatCall(c.url, c.key, c.model, "Reply with OK.", c.provider === "openai" || c.provider === "lovable");
       if (!result.ok) continue;
       if (c.provider !== s?.provider || c.model !== s?.model) {
         const { error } = await admin.from("ai_settings").update({ provider: c.provider, model: c.model }).eq("id", 1);
@@ -576,7 +576,7 @@ async function repair(admin: any, fix: string): Promise<string> {
     const key = k?.openai_key?.trim() || pool.find((p) => p?.provider === "openai" && p?.key?.trim())?.key?.trim() || process.env["OPENAI_API_KEY"];
     if (!key) throw new Error("OpenAI API key পাওয়া যায়নি; কোনো সেটিংস বদলানো হয়নি।");
     const test = await safeChatCall(OPENAI_CHAT, key, "gpt-6-astra", "Reply with OK.", true);
-    if (!test.ok) throw new Error(`OpenAI-এর live test ব্যর্থ (HTTP ${test.status}); কী, quota বা access যাচাই করুন। কোনো সেটিংস বদলানো হয়নি।`);
+    if (!test.ok) { const diagnosis = classifyError(test.status, test.text); throw new Error(`OpenAI live test ব্যর্থ: ${diagnosis.label} (HTTP ${test.status}) — ${test.text.slice(0, 220)}। কোনো সেটিংস বদলানো হয়নি।`); }
     const { error } = await admin.from("ai_settings").update({ provider: "openai", model: "gpt-6-astra" }).eq("id", 1);
     if (error) throw new Error(error.message);
     return "OpenAI gpt-6-astra-তে লাইভ পরীক্ষা সফল হয়েছে; যাচাইকৃত প্রোভাইডার সেট করা হয়েছে।";
@@ -588,7 +588,7 @@ async function repair(admin: any, fix: string): Promise<string> {
     const key = pool.find((p) => p?.provider === "deepseek" && p?.key?.trim())?.key?.trim() || process.env["DEEPSEEK_API_KEY"];
     if (!key) throw new Error("DeepSeek API key পাওয়া যায়নি; কোনো সেটিংস বদলানো হয়নি।");
     const test = await safeChatCall(DEEPSEEK_CHAT, key, "deepseek-flash", "Reply with OK.");
-    if (!test.ok) throw new Error(`DeepSeek-এর live test ব্যর্থ (HTTP ${test.status}); কী, quota বা access যাচাই করুন। কোনো সেটিংস বদলানো হয়নি।`);
+    if (!test.ok) { const diagnosis = classifyError(test.status, test.text); throw new Error(`DeepSeek live test ব্যর্থ: ${diagnosis.label} (HTTP ${test.status}) — ${test.text.slice(0, 220)}। কোনো সেটিংস বদলানো হয়নি।`); }
     const { error } = await admin.from("ai_settings").update({ provider: "deepseek", model: "deepseek-flash" }).eq("id", 1);
     if (error) throw new Error(error.message);
     return "DeepSeek deepseek-flash-এ লাইভ পরীক্ষা সফল হয়েছে; যাচাইকৃত প্রোভাইডার সেট করা হয়েছে।";
@@ -597,6 +597,7 @@ async function repair(admin: any, fix: string): Promise<string> {
   if (fix === "switch_google_model") {
     const { data: k } = await admin.from("ai_keys").select("google_key").eq("id", 1).maybeSingle();
     const key = k?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
+    if (!key) throw new Error("Google API key পাওয়া যায়নি; কোনো সেটিংস বদলানো হয়নি।");
     for (const m of WORKING_GOOGLE_MODELS) {
       if ((await safeChatCall(GOOGLE_CHAT, key, m, "ok")).ok) {
         await admin.from("ai_settings").update({ model: m, provider: "google" }).eq("id", 1);
@@ -604,25 +605,6 @@ async function repair(admin: any, fix: string): Promise<string> {
       }
     }
     throw new Error("কোনো সচল Google মডেল পাওয়া যায়নি");
-  }
-
-  if (fix === "switch_to_working_provider") {
-    const { data: k } = await admin.from("ai_keys").select("*").eq("id", 1).maybeSingle();
-    const gKey = k?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
-    if (gKey && (await safeChatCall(GOOGLE_CHAT, gKey, "gemini-3.8-flash", "ok")).ok) {
-      await admin.from("ai_settings").update({ provider: "google", model: "gemini-3.8-flash" }).eq("id", 1);
-      return "সচল Google Gemini (gemini-3.8-flash) প্রোভাইডারে সুইচ করা হয়েছে";
-    }
-    const oKey = k?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
-    if (oKey && (await safeChatCall(OPENAI_CHAT, oKey, "gpt-6-astra", "ok", true)).ok) {
-      await admin.from("ai_settings").update({ provider: "openai", model: "gpt-6-astra" }).eq("id", 1);
-      return "সচল OpenAI (gpt-6-astra) প্রোভাইডারে সুইচ করা হয়েছে";
-    }
-    if (process.env["LOVABLE_API_KEY"]) {
-      await admin.from("ai_settings").update({ provider: "lovable", model: "openai/gpt-6-astra" }).eq("id", 1);
-      return "বিল্ট-ইন Lovable AI প্রোভাইডারে সুইচ করা হয়েছে";
-    }
-    throw new Error("কোনো সচল এপিআই কী পাওয়া যায়নি — নতুন কী প্রদান করুন");
   }
 
   if (fix.startsWith("disable_pool:")) {

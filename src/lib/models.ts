@@ -18,7 +18,7 @@ export const CLAUDE_MODELS = [
 
 export const GOOGLE_MODELS = [
   { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash (দ্রুত ও শক্তিশালী)" },
-  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (স্থায়ী ও নির্ভরযোগ্য)" },
+
   { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite (সাশ্রয়ী)" },
 ];
 
