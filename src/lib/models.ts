@@ -1,4 +1,4 @@
-export type Provider = "lovable" | "claude" | "google" | "openai" | "deepseek" | "ollama";
+export type Provider = "lovable" | "claude" | "google" | "openai" | "deepseek" | "groq" | "openrouter" | "ollama";
 
 export const LOVABLE_MODELS = [
   { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (সবচেয়ে শক্তিশালী যুক্তি)" },
@@ -17,9 +17,9 @@ export const CLAUDE_MODELS = [
 ];
 
 export const GOOGLE_MODELS = [
-  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash (দ্রুত ও শক্তিশালী)" },
-
-  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite (সাশ্রয়ী)" },
+  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash (দ্রুত ও শক্তিশালী - ডিফল্ট)" },
+  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite (অতি দ্রুত ও ফ্রি টিয়ার)" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (গভীর বিশ্লেষণ)" },
 ];
 
 export const OPENAI_MODELS = [
@@ -33,8 +33,21 @@ export const OPENAI_MODELS = [
 export const DEEPSEEK_MODELS = [
   { id: "deepseek-flash", label: "DeepSeek Flash (অফিশিয়াল API, দ্রুত)" },
   { id: "deepseek-reasoner", label: "DeepSeek-R1 / Reasoner (গভীর যুক্তি ও চিন্তাশীল)" },
-
   { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+];
+
+export const GROQ_MODELS = [
+  { id: "openai/gpt-oss-120b", label: "GPT OSS 120B (Groq, reasoning ও tools)" },
+  { id: "openai/gpt-oss-20b", label: "GPT OSS 20B (Groq, দ্রুত)" },
+  { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B Versatile" },
+  { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B Instant (দ্রুত)" },
+];
+
+export const OPENROUTER_MODELS = [
+  { id: "openrouter/free", label: "OpenRouter Free Router (স্বয়ংক্রিয় ফ্রি মডেল)" },
+  { id: "google/gemma-4-31b-it:free", label: "Google Gemma 4 31B (ফ্রি)" },
+  { id: "cohere/north-mini-code:free", label: "Cohere North Mini Code (ফ্রি)" },
+  { id: "recursive/flint-v1.0:free", label: "Recursive Flint (ফ্রি; কোডিং)" },
 ];
 
 export const OLLAMA_MODELS = [
@@ -50,5 +63,7 @@ export const DEFAULT_MODELS: Record<Provider, string> = {
   google: "gemini-3.8-flash",
   openai: "gpt-6-astra",
   deepseek: "deepseek-flash",
+  groq: "llama-3.3-70b-versatile",
+  openrouter: "openrouter/free",
   ollama: "deepseek-r1:latest",
 };

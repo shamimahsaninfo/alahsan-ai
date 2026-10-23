@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Save, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/admin";
-import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, DEEPSEEK_MODELS, OLLAMA_MODELS, CLAUDE_MODELS, type Provider } from "@/lib/models";
+import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, DEEPSEEK_MODELS, GROQ_MODELS, OPENROUTER_MODELS, OLLAMA_MODELS, CLAUDE_MODELS, type Provider } from "@/lib/models";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -33,6 +33,8 @@ function AdminPage() {
   const [s, setS] = useState<S | null>(null);
   const [gKey, setGKey] = useState("");
   const [oKey, setOKey] = useState("");
+  const [groqKey, setGroqKey] = useState("");
+  const [orKey, setOrKey] = useState("");
   const [show, setShow] = useState(false);
   const [pool, setPool] = useState<PoolKey[]>([]);
   const [status, setStatus] = useState("");
@@ -46,8 +48,13 @@ function AdminPage() {
     });
     supabase.from("ai_keys").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
       if (data) {
-        setGKey(data.google_key); setOKey(data.openai_key);
-        setPool(Array.isArray(data.key_pool) ? (data.key_pool as unknown as PoolKey[]) : []);
+        setGKey(data.google_key || ""); setOKey(data.openai_key || "");
+        const rawP = Array.isArray(data.key_pool) ? (data.key_pool as unknown as PoolKey[]) : [];
+        const groqEntry = rawP.find((p) => p.provider === "groq");
+        const orEntry = rawP.find((p) => p.provider === "openrouter");
+        if (groqEntry) setGroqKey(groqEntry.key || "");
+        if (orEntry) setOrKey(orEntry.key || "");
+        setPool(rawP);
       }
     });
   }, [admin]);
@@ -71,6 +78,8 @@ function AdminPage() {
     if (p === "claude") return CLAUDE_MODELS;
     if (p === "openai") return OPENAI_MODELS;
     if (p === "deepseek") return DEEPSEEK_MODELS;
+    if (p === "groq") return GROQ_MODELS;
+    if (p === "openrouter") return OPENROUTER_MODELS;
     if (p === "ollama") return OLLAMA_MODELS;
     return LOVABLE_MODELS;
   };
@@ -85,13 +94,17 @@ function AdminPage() {
       daily_limit: Math.max(1, s.daily_limit || 1),
       updated_at: new Date().toISOString(),
     }, { onConflict: "id" });
-    const seen = new Set([gKey.trim(), oKey.trim()].filter(Boolean));
-    const cleanPool = pool
+    const extraPool: PoolKey[] = [];
+    if (groqKey.trim()) extraPool.push({ name: "Groq Main", provider: "groq", key: groqKey.trim(), active: true });
+    if (orKey.trim()) extraPool.push({ name: "OpenRouter Main", provider: "openrouter", key: orKey.trim(), active: true });
+    const seen = new Set([gKey.trim(), oKey.trim(), groqKey.trim(), orKey.trim()].filter(Boolean));
+    const cleanUserPool = pool
       .filter((p) => p.key.trim() || p.provider === "ollama")
       .map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
       .filter((p) => (p.key ? (seen.has(p.key) ? false : (seen.add(p.key), true)) : true))
       .slice(0, 5);
-    setPool(cleanPool);
+    const cleanPool = [...extraPool, ...cleanUserPool];
+    setPool(cleanUserPool);
     const r2 = await supabase.from("ai_keys").upsert({ id: 1, google_key: gKey.trim(), openai_key: oKey.trim(), key_pool: cleanPool, updated_at: new Date().toISOString() }, { onConflict: "id" });
     const err = r1.error || r2.error;
     setStatus(err ? `ত্রুটি: ${err.message}` : "✓ সংরক্ষিত হয়েছে। এআই এখন থেকেই নতুন সেটিং অনুযায়ী চলবে।");
@@ -144,8 +157,10 @@ function AdminPage() {
             {([
               ["lovable", "বিল্ট-ইন (GPT/Gemini)"],
               ["claude", "Claude (Lovable AI)"],
-              ["deepseek", "DeepSeek API"],
               ["google", "Google Gemini"],
+              ["groq", "Groq (ফ্রি ও অতি দ্রুত)"],
+              ["openrouter", "OpenRouter (ফ্রি মডেলসমূহ)"],
+              ["deepseek", "DeepSeek API"],
               ["openai", "OpenAI"],
               ["ollama", "Ollama (লোকাল/সার্ভার)"],
             ] as const).map(([p, l]) => (
@@ -184,9 +199,13 @@ function AdminPage() {
             </button>
           </div>
           <p className={hint}>শুধু অ্যাডমিন দেখতে পান। Google বা OpenAI মোড বেছে নিলে এই কী ব্যবহার হবে। বিল্ট-ইন মোডে কী লাগে না।</p>
-          <label className="mt-4 block text-sm text-muted-foreground">Google Gemini API Key</label>
+          <label className="mt-4 block text-sm text-muted-foreground">Google Gemini API Key (ফ্রি টিয়ার সাপোর্ট)</label>
           <input type={show ? "text" : "password"} value={gKey} onChange={(e) => setGKey(e.target.value)} className={`${input} mt-1`} placeholder="AIza…" />
-          <label className="mt-3 block text-sm text-muted-foreground">OpenAI API Key</label>
+          <label className="mt-3 block text-sm text-muted-foreground">Groq API Key (ফ্রি ও অতি দ্রুত মডেল)</label>
+          <input type={show ? "text" : "password"} value={groqKey} onChange={(e) => setGroqKey(e.target.value)} className={`${input} mt-1`} placeholder="gsk_…" />
+          <label className="mt-3 block text-sm text-muted-foreground">OpenRouter API Key (ফ্রি মডেলসমূহ)</label>
+          <input type={show ? "text" : "password"} value={orKey} onChange={(e) => setOrKey(e.target.value)} className={`${input} mt-1`} placeholder="sk-or-…" />
+          <label className="mt-3 block text-sm text-muted-foreground">OpenAI API Key (পেইড)</label>
           <input type={show ? "text" : "password"} value={oKey} onChange={(e) => setOKey(e.target.value)} className={`${input} mt-1`} placeholder="sk-…" />
         </section>
 
@@ -355,7 +374,7 @@ function FatwaBank() {
 }
 
 
-type PoolKey = { name: string; provider: "google" | "openai" | "deepseek" | "ollama" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
+type PoolKey = { name: string; provider: "google" | "openai" | "deepseek" | "groq" | "openrouter" | "ollama" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
 
 function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean }) {
   const input = "w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary";
@@ -372,9 +391,11 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
             <div className="flex min-w-0 gap-2">
               <input value={p.name} onChange={(e) => upd(i, { name: e.target.value })} placeholder="নাম (যেমন: Google কী ২)" className={input} />
               <select value={p.provider} onChange={(e) => upd(i, { provider: e.target.value as PoolKey["provider"] })} className={`${input} max-w-[9rem]`}>
-                <option value="google">Google</option>
-                <option value="openai">OpenAI</option>
+                <option value="google">Google Gemini</option>
+                <option value="groq">Groq (ফ্রি)</option>
+                <option value="openrouter">OpenRouter (ফ্রি)</option>
                 <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
                 <option value="ollama">Ollama</option>
                 <option value="custom">অন্য সেবা</option>
               </select>
