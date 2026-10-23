@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Save, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/admin";
-import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, type Provider } from "@/lib/models";
+import { GOOGLE_MODELS, LOVABLE_MODELS, OPENAI_MODELS, DEEPSEEK_MODELS, OLLAMA_MODELS, CLAUDE_MODELS, type Provider } from "@/lib/models";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -66,7 +66,14 @@ function AdminPage() {
   if (!s) return <div className="min-h-screen bg-background p-8 text-muted-foreground">লোড হচ্ছে…</div>;
 
   const set = <K extends keyof S>(k: K, v: S[K]) => setS({ ...s, [k]: v });
-  const listFor = (p: Provider) => (p === "google" ? GOOGLE_MODELS : p === "openai" ? OPENAI_MODELS : LOVABLE_MODELS);
+  const listFor = (p: Provider) => {
+    if (p === "google") return GOOGLE_MODELS;
+    if (p === "claude") return CLAUDE_MODELS;
+    if (p === "openai") return OPENAI_MODELS;
+    if (p === "deepseek") return DEEPSEEK_MODELS;
+    if (p === "ollama") return OLLAMA_MODELS;
+    return LOVABLE_MODELS;
+  };
   const models = listFor(s.provider);
 
   const save = async () => {
@@ -79,8 +86,11 @@ function AdminPage() {
       updated_at: new Date().toISOString(),
     }, { onConflict: "id" });
     const seen = new Set([gKey.trim(), oKey.trim()].filter(Boolean));
-    const cleanPool = pool.filter((p) => p.key.trim()).map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
-      .filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true))).slice(0, 2);
+    const cleanPool = pool
+      .filter((p) => p.key.trim() || p.provider === "ollama")
+      .map((p) => ({ ...p, name: p.name.trim() || p.provider, key: p.key.trim() }))
+      .filter((p) => (p.key ? (seen.has(p.key) ? false : (seen.add(p.key), true)) : true))
+      .slice(0, 5);
     setPool(cleanPool);
     const r2 = await supabase.from("ai_keys").upsert({ id: 1, google_key: gKey.trim(), openai_key: oKey.trim(), key_pool: cleanPool, updated_at: new Date().toISOString() }, { onConflict: "id" });
     const err = r1.error || r2.error;
@@ -130,10 +140,23 @@ function AdminPage() {
 
         <section className={card}>
           <h2 className={h2}>৩. এআই মোড, মডেল ও চিন্তার গভীরতা</h2>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {([["lovable", "বিল্ট-ইন"], ["google", "Google Gemini"], ["openai", "OpenAI"]] as const).map(([p, l]) => (
-              <button key={p} onClick={() => setS({ ...s, provider: p, model: listFor(p)[0]?.id ?? "" })}
-                className={`rounded-lg border px-3 py-3 text-sm ${s.provider === p ? "border-primary bg-primary/15 text-primary" : "border-border"}`}>{l}</button>
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {([
+              ["lovable", "বিল্ট-ইন (GPT/Gemini)"],
+              ["claude", "Claude (Lovable AI)"],
+              ["deepseek", "DeepSeek API"],
+              ["google", "Google Gemini"],
+              ["openai", "OpenAI"],
+              ["ollama", "Ollama (লোকাল/সার্ভার)"],
+            ] as const).map(([p, l]) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setS({ ...s, provider: p as Provider, model: listFor(p as Provider)[0]?.id ?? "" })}
+                className={`rounded-lg border px-3 py-3 text-sm text-center ${s.provider === p ? "border-primary bg-primary/15 text-primary" : "border-border"}`}
+              >
+                {l}
+              </button>
             ))}
           </div>
           <label className="mt-4 block text-sm text-muted-foreground">মডেল</label>
@@ -332,16 +355,16 @@ function FatwaBank() {
 }
 
 
-type PoolKey = { name: string; provider: "google" | "openai" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
+type PoolKey = { name: string; provider: "google" | "openai" | "deepseek" | "ollama" | "custom"; key: string; base_url?: string; model?: string; active: boolean };
 
 function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKey[]) => void; show: boolean }) {
   const input = "w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary";
   const upd = (i: number, patch: Partial<PoolKey>) => setPool(pool.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   return (
     <section className="mt-6 rounded-2xl border border-border bg-card/80 p-6">
-      <h2 className="font-display text-xl text-primary">৪ক. সেকেন্ডারি ব্যাকআপ কী (Backup Key - Zero Downtime, সর্বোচ্চ ২টি)</h2>
+      <h2 className="font-display text-xl text-primary">৪ক. সেকেন্ডারি ব্যাকআপ ও অতিরিক্ত ইঞ্জিন পুল (Backup & Extra Engines, সর্বোচ্চ ৫টি)</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        সর্বোচ্চ ২টি ব্যাকআপ কী রাখা যায়; একই কী দুবার থাকলে সংরক্ষণের সময় স্বয়ংক্রিয়ভাবে বাদ যাবে। মূল কী কাজ না করলে (লিমিট শেষ হলে) এআই নিজে থেকেই তালিকার পরের কী দিয়ে চেষ্টা করবে। "অন্য সেবা" দিয়ে Groq, DeepSeek, OpenRouter-এর মতো যেকোনো সেবা যোগ করা যায়। যোগ করার পর নিচে "সংরক্ষণ করুন" চাপুন।
+        সর্বোচ্চ ৫টি অতিরিক্ত কী বা মডেল রাখা যায়। মূল কী শেষ হলে এআই স্বয়ংক্রিয়ভাবে তালিকার পরের কী দিয়ে চেষ্টা করবে। এছাড়াও DeepSeek, Ollama বা নিজস্ব GPU সার্ভারের OpenAI-compatible API এখানে যুক্ত করতে পারেন (Ollama-তে API key ঐচ্ছিক)। যোগ করার পর নিচে "সংরক্ষণ করুন" চাপুন।
       </p>
       <div className="mt-4 space-y-3">
         {pool.map((p, i) => (
@@ -351,14 +374,26 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
               <select value={p.provider} onChange={(e) => upd(i, { provider: e.target.value as PoolKey["provider"] })} className={`${input} max-w-[9rem]`}>
                 <option value="google">Google</option>
                 <option value="openai">OpenAI</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="ollama">Ollama</option>
                 <option value="custom">অন্য সেবা</option>
               </select>
             </div>
             <input type={show ? "text" : "password"} value={p.key} onChange={(e) => upd(i, { key: e.target.value })} placeholder="এপিআই কী" className={input} />
-            {p.provider === "custom" && (
+            {(p.provider === "custom" || p.provider === "ollama") && (
               <div className="flex gap-2">
-                <input value={p.base_url ?? ""} onChange={(e) => upd(i, { base_url: e.target.value })} placeholder="ঠিকানা, যেমন https://api.groq.com/openai/v1" className={input} />
-                <input value={p.model ?? ""} onChange={(e) => upd(i, { model: e.target.value })} placeholder="মডেলের নাম" className={input} />
+                <input
+                  value={p.base_url ?? ""}
+                  onChange={(e) => upd(i, { base_url: e.target.value })}
+                  placeholder={p.provider === "ollama" ? "সার্ভারে পৌঁছানো যায় এমন HTTPS Ollama URL" : "ঠিকানা, যেমন https://api.groq.com/openai/v1"}
+                  className={input}
+                />
+                <input
+                  value={p.model ?? ""}
+                  onChange={(e) => upd(i, { model: e.target.value })}
+                  placeholder={p.provider === "ollama" ? "মডেল (যেমন: deepseek-r1:latest)" : "মডেলের নাম"}
+                  className={input}
+                />
               </div>
             )}
             <div className="flex items-center justify-between text-sm">
@@ -370,7 +405,7 @@ function KeyPool({ pool, setPool, show }: { pool: PoolKey[]; setPool: (p: PoolKe
           </div>
         ))}
       </div>
-      {pool.length < 2 && <button onClick={() => setPool([...pool, { name: "", provider: "google", key: "", active: true }])}
+      {pool.length < 5 && <button onClick={() => setPool([...pool, { name: "", provider: "google", key: "", active: true }])}
         className="mt-3 rounded-lg border border-primary px-4 py-2 text-sm text-primary">+ নতুন কী যোগ করুন</button>}
     </section>
   );

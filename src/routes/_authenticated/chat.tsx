@@ -299,15 +299,23 @@ function ChatPage() {
     });
   };
   const docRef = useRef<HTMLInputElement>(null);
-  const [doc, setDoc] = useState<{ name: string; text: string } | null>(null);
+  const [docs, setDocs] = useState<{ name: string; text: string }[]>([]);
   const [docBusy, setDocBusy] = useState(false);
-  const pickDoc = async (file: File) => {
-    if (file.size > 20_000_000) return alert("ফাইলটি ২০ MB-এর বেশি বড়।");
+  const pickDocs = async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (docs.length + list.length > 5) return alert("একসাথে সর্বোচ্চ ৫টি ফাইল যোগ করা যাবে।");
     setDocBusy(true);
     try {
-      const t = (await extractDocText(file)).trim();
-      if (!t) alert("ফাইলে পড়ার মতো লেখা পাওয়া যায়নি। স্ক্যান করা পাতা হলে ছবি হিসেবে পাঠান।");
-      else setDoc({ name: file.name, text: t });
+      const added: { name: string; text: string }[] = [];
+      for (const f of list) {
+        if (f.size > 25_000_000) { alert(`"${f.name}" ফাইলটি ২৫ MB-এর বেশি বড়।`); continue; }
+        const t = (await extractDocText(f)).trim();
+        if (!t) { alert(`"${f.name}" ফাইলে পড়ার মতো লেখা পাওয়া যায়নি। স্ক্যান করা পাতা হলে ছবি হিসেবে দিন।`); continue; }
+        added.push({ name: f.name, text: t });
+      }
+      if (added.length) {
+        setDocs((prev) => [...prev, ...added].slice(0, 5));
+      }
     } catch (e: any) { alert(e?.message || "ফাইলটি পড়া যায়নি।"); }
     setDocBusy(false);
   };
@@ -478,24 +486,26 @@ function ChatPage() {
     const send = async (override?: string, base?: Msg[], regen = false) => {
     const cur = base ?? msgs;
     const imgs = override !== undefined ? [] : images;
-    const d = override !== undefined ? null : doc;
-    const typed = override !== undefined ? override.trim() : input.trim() || (imgs.length ? "এই ছবিগুলো বিশ্লেষণ করুন।" : d ? "এই ফাইলটির সারসংক্ষেপ ও বিশ্লেষণ দিন।" : "");
+    const curDocs = override !== undefined ? [] : docs;
+    const typed = override !== undefined ? override.trim() : input.trim() || (imgs.length ? "এই ছবিগুলো বিশ্লেষণ করুন।" : curDocs.length ? "সংযুক্ত ফাইলগুলো বিশ্লেষণ ও প্রশ্নের উত্তর দিন।" : "");
     // Show/store only a short label; the full file text goes to the AI for this message only
-    const text = d ? `${typed}\n\n[সংযুক্ত ফাইল: ${d.name}]` : typed;
+    const docLabels = curDocs.map((d) => `[সংযুক্ত ফাইল: ${d.name}]`).join(" ");
+    const text = curDocs.length ? `${typed}${docLabels ? `\n\n${docLabels}` : ""}` : typed;
     const modeHint = MODES.find((x) => x.id === mode)?.hint;
-    const baseText = d ? `${typed}\n\n=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 32000)}` : typed;
+    const docsFormatted = curDocs.map((d) => `=== সংযুক্ত ফাইল: ${d.name} ===\n${d.text.slice(0, 35000)}`).join("\n\n");
+    const baseText = curDocs.length ? `${typed}\n\n${docsFormatted}` : typed;
     const apiText = modeHint ? `[নির্দেশ: ${modeHint}]\n\n${baseText}` : baseText;
     if (!typed || loading || docBusy) return;
     setInput("");
     setImages([]);
-    setDoc(null);
+    setDocs([]);
     // Session refresh and conversation creation are independent; start them together.
     setLoading(true);
     const sessionP = supabase.auth.getSession();
     let convId = active;
     if (!convId) {
       const { data, error } = await supabase.from("conversations").insert({ title: text.slice(0, 60), user_id: user.id }).select("id").single();
-      if (error || !data) { setInput(typed); setImages(imgs); setDoc(d); setLoading(false); alert(`কথোপকথন তৈরি করা যায়নি: ${error?.message ?? ""}`); return; }
+      if (error || !data) { setInput(typed); setImages(imgs); setDocs(curDocs); setLoading(false); alert(`কথোপকথন তৈরি করা যায়নি: ${error?.message ?? ""}`); return; }
       convId = data.id;
       setActive(convId);
     }
@@ -841,7 +851,7 @@ function ChatPage() {
         </div>
         <div className="shrink-0 border-t border-border/60 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-4">
           {/* সংযুক্ত ছবি ও ফাইলের প্রিভিউ */}
-          {(doc || docBusy || images.length > 0) && (
+          {(docs.length > 0 || docBusy || images.length > 0) && (
             <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {images.map((src, idx) => (
                 <div key={idx} className="relative inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1">
@@ -856,15 +866,21 @@ function ChatPage() {
                   </button>
                 </div>
               ))}
-              {docBusy && <span>ফাইল পড়া হচ্ছে...</span>}
-              {doc && (
-                <span className="rounded-md border border-border bg-card px-2 py-1">
-                  {doc.name} ({doc.text.length} অক্ষর){" "}
-                  <button type="button" onClick={() => setDoc(null)} className="ml-1 text-destructive">
+              {docBusy && <span className="animate-pulse rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-primary">ফাইল পড়া ও বিশ্লেষণ চলছে...</span>}
+              {docs.map((d, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs shadow-sm">
+                  <span className="text-primary font-medium">📄 {d.name}</span>
+                  <span className="text-muted-foreground">({Math.round(d.text.length / 1000)}k অক্ষর)</span>
+                  <button
+                    type="button"
+                    onClick={() => setDocs((prev) => prev.filter((_, i) => i !== idx))}
+                    className="ml-1 text-destructive hover:font-bold"
+                    aria-label="মুছুন"
+                  >
                     ✕
                   </button>
                 </span>
-              )}
+              ))}
             </div>
           )}
 
@@ -880,7 +896,7 @@ function ChatPage() {
                 e.target.value = "";
               }}
             />
-            <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickDoc(f); e.target.value = ""; }} />
+            <input ref={docRef} type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html" multiple className="hidden" onChange={(e) => { if (e.target.files) pickDocs(e.target.files); e.target.value = ""; }} />
             <Popover open={plusOpen} onOpenChange={setPlusOpen}>
               <PopoverTrigger asChild>
                 <button className={`shrink-0 rounded-xl p-2 sm:p-3 ${listening ? "animate-pulse bg-destructive text-destructive-foreground" : "text-primary hover:bg-primary/10"}`} aria-label="আরও অপশন"><Plus size={22} /></button>
@@ -912,7 +928,7 @@ function ChatPage() {
             {loading ? (
               <button onClick={() => abortRef.current?.abort()} className="shrink-0 rounded-xl bg-secondary p-2 sm:p-3" aria-label="থামান"><Square size={20} /></button>
             ) : (
-              <button onClick={() => send()} disabled={(!input.trim() && !images.length && !doc) || docBusy} className="shrink-0 rounded-xl bg-primary p-2 sm:p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
+              <button onClick={() => send()} disabled={(!input.trim() && !images.length && !docs.length) || docBusy} className="shrink-0 rounded-xl bg-primary p-2 sm:p-3 text-primary-foreground disabled:opacity-40" aria-label="পাঠান"><Send size={20} /></button>
             )}
           </div>
         </div>   

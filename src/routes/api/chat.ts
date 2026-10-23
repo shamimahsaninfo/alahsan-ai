@@ -9,7 +9,7 @@ const Body = z.object({
     .array(
       z.object({
         role: z.enum(["user", "assistant"]),
-        content: z.string().max(40000),
+        content: z.string().max(160000), // RAG ও বড় ডকুমেন্ট পড়ার জন্য বাড়ানো হয়েছে
         image: z
           .string()
           .regex(/^data:image\/(png|jpe?g|webp|gif);base64,/)
@@ -110,6 +110,12 @@ const GROUNDING_RULES = `\n\n## তথ্য যাচাই ও সততা (�
 - [#16] ব্যবহারকারীর প্রশ্নে কোনো ভুল ধারণা বা ভুয়া তথ্য থাকলে উত্তরের শুরুতেই বিনয়ের সাথে "সংশোধন:" লিখে তা ধরিয়ে দেবে।
 - [#17] উৎসে তথ্য না থাকলে এবং তুমি নিশ্চিত না হলে অনুমান করবে না; স্পষ্ট লিখবে: "এ বিষয়ে নির্ভরযোগ্য তথ্য পাওয়া যায়নি।"
 - [#20][#48] উৎস ব্যবহার করলে বাক্যের শেষে [১], [২] এভাবে ফুটনোট দেবে, এবং উত্তরের শেষে (ফলো-আপ প্রশ্নের আগে) "### সূত্র" শিরোনামে নম্বরসহ শিরোনাম ও লিংক দেবে। উৎসে নেই এমন লিংক বানাবে না।`;
+
+const DOCUMENT_RAG_RULES = `\n\n## ফাইল ও ডকুমেন্ট বিশ্লেষণ গার্ডরেল (RAG & Multi-Document Analysis)
+- [#50] ব্যবহারকারী কোনো ফাইল, বই, নথি, পিডিএফ বা নোট সংযুক্ত করলে তার বিষয়বস্তু সর্বোচ্চ অগ্রাধিকার পাবে।
+- [#51] উত্তরের প্রতিটি পয়েন্ট প্রদত্ত ডকুমেন্টের তথ্য থেকে নির্ভুলভাবে তুলে ধরবে এবং রেফারেন্স হিসেবে [ডকুমেন্ট: ফাইলের নাম, পৃষ্ঠা: X] উল্লেখ করবে।
+- [#52] ফাইলে নেই এমন কোনো কথা বা তথ্য নিজের পক্ষ থেকে বানাবে না। যদি কোনো প্রশ্নের উত্তর ডকুমেন্টে না থাকে, তবে বিনয়ের সাথে স্পষ্ট বলবে: "সংযুক্ত নথিতে এ বিষয়ে কোনো তথ্য পাওয়া যায়নি।"
+- [#53] একাধিক নথি সংযুক্ত থাকলে পারস্পরিক তুলনা, বিষয়ভিত্তিক সারাংশ ও যৌক্তিক সমন্বয় করে স্বয়ংসম্পূর্ণ সমাধান দেবে।`;
 
 const CODE_RULES = `\n\n## কোডিং ও অ্যাপ বিল্ডার নিয়ম
 - [#31] সম্পূর্ণ কোড দেবে; "// বাকি কোড", "...", "TODO" জাতীয় অসম্পূর্ণ অংশ নিষিদ্ধ।
@@ -228,7 +234,11 @@ async function handleChat(request: Request): Promise<Response> {
         let model = picked ?? baseModel;
   
 
-        // API keys
+        type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
+        const rawPool = (Array.isArray((keys as { key_pool?: unknown })?.key_pool) ? (keys as { key_pool: PoolKey[] }).key_pool : [])
+          .filter((p) => p && p.active !== false && (p.key?.trim() || p.provider === "ollama"));
+
+        // API keys & Endpoints
         let url = "https://ai.gateway.lovable.dev/v1/chat/completions";
         let key = process.env["LOVABLE_API_KEY"];
         if (provider === "google") {
@@ -237,20 +247,41 @@ async function handleChat(request: Request): Promise<Response> {
         } else if (provider === "openai") {
           url = "https://api.openai.com/v1/chat/completions";
           key = keys?.openai_key?.trim() || process.env["OPENAI_API_KEY"];
+        } else if (provider === "deepseek") {
+          url = "https://api.deepseek.com/chat/completions";
+          const poolDeepseek = rawPool.find((p) => p.provider === "deepseek")?.key?.trim();
+          key = poolDeepseek || process.env["DEEPSEEK_API_KEY"];
+          if (!baseModel || baseModel.startsWith("gemini") || baseModel.startsWith("gpt")) {
+            model = "deepseek-v4-flash";
+          }
+        } else if (provider === "ollama") {
+          const poolOllama = rawPool.find((p) => p.provider === "ollama");
+          const configuredBase = poolOllama?.base_url || process.env["OLLAMA_BASE_URL"] || process.env["OLLAMA_URL"];
+          if (!configuredBase) return new Response("Ollama-র জন্য অ্যাডমিন প্যানেলে সার্ভারে পৌঁছানো যায় এমন Base URL দিন। ক্লাউড অ্যাপের localhost আপনার কম্পিউটার নয়।", { status: 400 });
+          const rawBase = configuredBase.replace(/\/$/, "");
+          url = rawBase.endsWith("/v1") ? `${rawBase}/chat/completions` : `${rawBase}/v1/chat/completions`;
+          key = poolOllama?.key?.trim() || process.env["OLLAMA_API_KEY"] || "ollama";
+          model = poolOllama?.model?.trim() || model || "deepseek-r1:latest";
         }
-                // নিজস্ব Google কী থাকলে সরাসরি Google
-                const ownGoogle = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
-        if (ownGoogle && !picked && provider !== "openai") {
+
+        // নিজস্ব Google কী থাকলে সরাসরি Google
+        const ownGoogle = keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
+        if (ownGoogle && !picked && provider === "google") {
           url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
           key = ownGoogle;
-          model = (baseModel || "gemini-3-flash-preview").replace(/^google\//, "");
-        }
-         else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
+          model = (baseModel || "gemini-2.5-flash").replace(/^google\//, "");
+        } else if (!key && provider !== "lovable" && process.env["LOVABLE_API_KEY"]) {
           url = "https://ai.gateway.lovable.dev/v1/chat/completions";
           key = process.env["LOVABLE_API_KEY"];
-          model = model.includes("/") ? model : provider === "google" ? `google/${model}` : DEFAULT_MODELS.lovable;
+          model = model.includes("/")
+            ? model
+            : provider === "google"
+            ? `google/${model}`
+            : provider === "deepseek"
+            ? `deepseek/${model}`
+            : DEFAULT_MODELS.lovable;
         }
-        if (!key) return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান।", { status: 503 });
+        if (!key && provider !== "ollama") return new Response("এই মোডের এপিআই কী সেট করা নেই। অ্যাডমিন প্যানেলে কী বসান বা বিল্ট-ইন মোড ব্যবহার করুন।", { status: 503 });
 
         // Merge Prompts properly so BASE_PROMPT is NEVER lost
         let system = PERSONA + "\n\n" + BASE_PROMPT;
@@ -292,6 +323,12 @@ async function handleChat(request: Request): Promise<Response> {
           system += `\n\n=== অ্যাডমিনের নির্দেশনা (সর্বোচ্চ অগ্রাধিকার — অবশ্যই মেনে চলবে) ===\n${s.admin_note.trim()}`;
         }
         system += INTEGRITY;
+
+        // ডকুমেন্ট / RAG বিশ্লেষণ নির্দেশনা যুক্ত করা
+        const hasAttachedDocs = parsed.data.messages.some((m) => typeof m.content === "string" && m.content.includes("=== সংযুক্ত ফাইল:"));
+        if (hasAttachedDocs) {
+          system += DOCUMENT_RAG_RULES;
+        }
 
         // Current Bangladesh date/time so the AI always knows "today"
         const now = new Date();
@@ -358,16 +395,41 @@ async function handleChat(request: Request): Promise<Response> {
           body["reasoning_effort"] = eff === "xhigh" && provider === "google" ? "high" : eff;
         }
 
-        type PoolKey = { name?: string; provider?: string; key?: string; base_url?: string; model?: string; active?: boolean };
-        const pool = (Array.isArray((keys as { key_pool?: unknown })?.key_pool) ? (keys as { key_pool: PoolKey[] }).key_pool : [])
-          .filter((p) => p && p.active !== false && p.key?.trim());
-        const attempts: { url: string; key: string; model: string; label: string }[] = [{ url, key, model, label: "primary" }];
-        for (const p of pool) {
-          if (p.provider === provider && p.key!.trim() !== key) attempts.push({ url, key: p.key!.trim(), model, label: p.name || provider });
+        if (provider === "claude") {
+          const gatewayKey = process.env["LOVABLE_API_KEY"];
+          if (!gatewayKey) return new Response("Claude চালাতে Lovable AI চালু করতে হবে।", { status: 503 });
+          const claudeMessages = toClaudeMessages(msgs);
+          const upstream = await fetch("https://ai.gateway.lovable.dev/v1/messages", {
+            method: "POST",
+            headers: { "Lovable-API-Key": gatewayKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ model, max_tokens: 65536, stream: true, system, messages: claudeMessages }),
+          }).catch((e) => new Response(String(e), { status: 502 }));
+          if (!upstream.ok || !upstream.body) {
+            const detail = (await upstream.text()).slice(0, 800);
+            return new Response(friendlyError(upstream.status, detail), { status: upstream.status >= 500 ? 502 : upstream.status });
+          }
+          stages.push("write");
+          return withStages(stages, adaptClaudeStream(upstream.body));
         }
-        for (const p of pool) {
-          if (p.provider === "custom" && p.base_url?.startsWith("https://"))
-            attempts.push({ url: p.base_url.replace(/\/$/, "") + "/chat/completions", key: p.key!.trim(), model: p.model?.trim() || model, label: p.name || "custom" });
+
+        const attempts: { url: string; key: string; model: string; label: string }[] = [{ url, key: key || "local", model, label: "primary" }];
+        for (const p of rawPool) {
+          if (p.provider === provider && p.key?.trim() && p.key.trim() !== key) {
+            attempts.push({ url, key: p.key.trim(), model, label: p.name || provider });
+          }
+        }
+        for (const p of rawPool) {
+          if (p.provider === "custom" && p.base_url?.startsWith("https://")) {
+            const b = p.base_url.replace(/\/$/, "");
+            const endpoint = b.endsWith("/chat/completions") ? b : b.endsWith("/v1") ? `${b}/chat/completions` : `${b}/v1/chat/completions`;
+            attempts.push({ url: endpoint, key: p.key?.trim() || "local", model: p.model?.trim() || model, label: p.name || "custom" });
+          } else if (p.provider === "deepseek" && provider !== "deepseek" && p.key?.trim()) {
+            attempts.push({ url: "https://api.deepseek.com/chat/completions", key: p.key.trim(), model: p.model?.trim() || "deepseek-reasoner", label: p.name || "deepseek" });
+          } else if (p.provider === "ollama" && provider !== "ollama" && p.base_url?.startsWith("https://")) {
+            const rawBase = p.base_url.replace(/\/$/, "");
+            const endpoint = rawBase.endsWith("/v1") ? `${rawBase}/chat/completions` : `${rawBase}/v1/chat/completions`;
+            attempts.push({ url: endpoint, key: p.key?.trim() || "ollama", model: p.model?.trim() || "deepseek-r1:latest", label: p.name || "ollama" });
+          }
         }
 
         const hasImage = (body["messages"] as any[]).some((m) => Array.isArray(m?.content));
@@ -416,6 +478,81 @@ async function handleChat(request: Request): Promise<Response> {
         if (realErr) stages.push("fallback");
         stages.push("write");
         return withStages(stages, res.body);
+}
+
+function toClaudeMessages(messages: { role: string; content: unknown }[]) {
+  return messages.filter((m) => m.role === "user" || m.role === "assistant").map((m) => {
+    if (typeof m.content === "string") return { role: m.role, content: m.content };
+    const blocks: any[] = Array.isArray(m.content) ? m.content.flatMap((part: any): any[] => {
+      if (part?.type === "text") return [{ type: "text", text: String(part.text ?? "") }];
+      const dataUrl = part?.image_url?.url;
+      const match = typeof dataUrl === "string" && dataUrl.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,([A-Za-z0-9+/=]+)$/i);
+      return match ? [{ type: "image", source: { type: "base64", media_type: match[1], data: match[2] } }] : [];
+    }) : [{ type: "text", text: String(m.content ?? "") }];
+    return { role: m.role, content: blocks.length ? blocks : [{ type: "text", text: "[ছবির বিষয়বস্তু এই মডেলে পাঠানো যায়নি]" }] };
+  });
+}
+
+function adaptClaudeStream(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let ended = false;
+  const chunk = (content: string) => `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        while (!ended) {
+          const boundary = buffer.search(/\r?\n\r?\n/);
+          if (boundary >= 0) {
+            const block = buffer.slice(0, boundary);
+            const separator = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] ?? "\n\n";
+            buffer = buffer.slice(boundary + separator.length);
+            let event = "";
+            const data: string[] = [];
+            for (const line of block.split(/\r?\n/)) {
+              if (line.startsWith("event:")) event = line.slice(6).trim();
+              else if (line.startsWith("data:")) data.push(line.slice(5).trim());
+            }
+            if (!data.length) continue;
+            try {
+              const item = JSON.parse(data.join("\n"));
+              if (event === "content_block_delta" && item?.delta?.type === "text_delta" && item.delta.text) {
+                controller.enqueue(encoder.encode(chunk(item.delta.text)));
+                return;
+              }
+              if (event === "message_stop") {
+                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                ended = true;
+                controller.close();
+                return;
+              }
+              if (event === "error" || item?.type === "error") {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: { status: 502, message: "Claude stream-এ সমস্যা হয়েছে। আবার চেষ্টা করুন।" } })}\n\n`));
+                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                ended = true;
+                controller.close();
+                return;
+              }
+            } catch { /* ignore malformed/non-JSON event data */ }
+            continue;
+          }
+          const { value, done } = await reader.read();
+          buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+          if (done) {
+            ended = true;
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+            return;
+          }
+        }
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    async cancel(reason) { ended = true; await reader.cancel(reason).catch(() => {}); },
+  });
 }
 
 function pick(a: string[]): string {
