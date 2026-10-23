@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { DEFAULT_MODELS, LOVABLE_MODELS, type Provider } from "@/lib/models";
+import { DEFAULT_MODELS, LOVABLE_MODELS, GROQ_MODELS, OPENROUTER_MODELS, type Provider } from "@/lib/models";
 import { serviceError } from "@/lib/service-errors";
 
 const Body = z.object({
@@ -243,15 +243,23 @@ async function handleChat(request: Request): Promise<Response> {
         let key = process.env["LOVABLE_API_KEY"];
         if (provider === "google") {
           url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-          key = keys?.google_key?.trim() || rawPool.find((p) => p.provider === "google")?.key?.trim() || process.env["GOOGLE_API_KEY"];
+          key = keys?.google_key?.trim() || rawPool.find((p) => p.provider === "google" && p.active !== false)?.key?.trim() || process.env["GOOGLE_API_KEY"];
           if (!model || !model.startsWith("gemini-")) model = "gemini-3.8-flash";
+        } else if (provider === "groq") {
+          url = "https://api.groq.com/openai/v1/chat/completions";
+          key = rawPool.find((p) => p.provider === "groq" && p.active !== false)?.key?.trim() || process.env["GROQ_API_KEY"];
+          if (!GROQ_MODELS.some((entry) => entry.id === model)) model = DEFAULT_MODELS.groq;
+        } else if (provider === "openrouter") {
+          url = "https://openrouter.ai/api/v1/chat/completions";
+          key = rawPool.find((p) => p.provider === "openrouter" && p.active !== false)?.key?.trim() || process.env["OPENROUTER_API_KEY"];
+          if (!OPENROUTER_MODELS.some((entry) => entry.id === model)) model = DEFAULT_MODELS.openrouter;
         } else if (provider === "openai") {
           url = "https://api.openai.com/v1/chat/completions";
-          key = keys?.openai_key?.trim() || rawPool.find((p) => p.provider === "openai")?.key?.trim() || process.env["OPENAI_API_KEY"];
-          if (!model || model.startsWith("gemini-") || model.startsWith("deepseek-") || model.startsWith("claude-")) model = "gpt-6-astra";
+          key = keys?.openai_key?.trim() || rawPool.find((p) => p.provider === "openai" && p.active !== false)?.key?.trim() || process.env["OPENAI_API_KEY"];
+          if (!model || model.startsWith("gemini-") || model.startsWith("deepseek-") || model.startsWith("claude-") || model.startsWith("llama-")) model = "gpt-6-astra";
         } else if (provider === "deepseek") {
           url = "https://api.deepseek.com/chat/completions";
-          const poolDeepseek = rawPool.find((p) => p.provider === "deepseek")?.key?.trim();
+          const poolDeepseek = rawPool.find((p) => p.provider === "deepseek" && p.active !== false)?.key?.trim();
           key = poolDeepseek || process.env["DEEPSEEK_API_KEY"];
           if (!model || !model.startsWith("deepseek-")) model = "deepseek-flash";
         } else if (provider === "ollama") {
@@ -418,6 +426,10 @@ async function handleChat(request: Request): Promise<Response> {
             const b = p.base_url.replace(/\/$/, "");
             const endpoint = b.endsWith("/chat/completions") ? b : b.endsWith("/v1") ? `${b}/chat/completions` : `${b}/v1/chat/completions`;
             attempts.push({ url: endpoint, key: p.key?.trim() || "local", model: p.model?.trim() || model, label: p.name || "custom", provider: "custom" });
+          } else if (p.provider === "groq" && provider !== "groq" && p.key?.trim()) {
+            attempts.push({ url: "https://api.groq.com/openai/v1/chat/completions", key: p.key.trim(), model: p.model?.trim() || "llama-3.3-70b-versatile", label: p.name || "groq", provider: "groq" });
+          } else if (p.provider === "openrouter" && provider !== "openrouter" && p.key?.trim()) {
+            attempts.push({ url: "https://openrouter.ai/api/v1/chat/completions", key: p.key.trim(), model: p.model?.trim() || "openrouter/free", label: p.name || "openrouter", provider: "openrouter" });
           } else if (p.provider === "deepseek" && provider !== "deepseek" && p.key?.trim()) {
             attempts.push({ url: "https://api.deepseek.com/chat/completions", key: p.key.trim(), model: p.model?.trim() || "deepseek-flash", label: p.name || "deepseek", provider: "deepseek" });
           } else if (p.provider === "openai" && provider !== "openai" && p.key?.trim()) {
@@ -435,15 +447,20 @@ async function handleChat(request: Request): Promise<Response> {
         let res: Response = new Response("no attempt", { status: 500 });
         let realErr: { status: number; text: string } | null = null;
 
+        const requestStartedAt = Date.now();
         for (const a of attempts) {
           if (hasImage && a.label !== "primary" && !a.url.includes("generativelanguage.googleapis.com") && !a.url.includes("openai.com")) continue;
-          // শুধু সংযোগ/প্রথম সাড়ার জন্য সময়সীমা; স্ট্রিম শুরু হলে আর কাটবে না
+          // Failover must stay bounded: a slow provider should not multiply 20s waits across keys.
           const ac = new AbortController();
-          const timer = setTimeout(() => ac.abort(), a.url.includes("generativelanguage") ? 15000 : attempts.length > 1 ? 20000 : 45000);
+          const remainingBudget = 25000 - (Date.now() - requestStartedAt);
+          if (remainingBudget <= 0) break;
+          const perAttemptTimeout = Math.min(a.url.includes("generativelanguage") ? 10000 : 12000, remainingBudget);
+          const timer = setTimeout(() => ac.abort(), perAttemptTimeout);
           // Provider-specific payload: avoid OpenAI-only params on Gemini, DeepSeek,
           // Ollama and custom OpenAI-compatible services.
           const attemptIsOpenAI = a.url.includes("api.openai.com");
-          const attemptIsReasoning = attemptIsOpenAI && (/^(o1|o3|o4)/i.test(a.model) || /^gpt-6/i.test(a.model));
+          const attemptIsGroqOSS = a.url.includes("api.groq.com") && a.model.startsWith("openai/gpt-oss-");
+          const attemptIsReasoning = (attemptIsOpenAI && (/^(o1|o3|o4)/i.test(a.model) || /^gpt-6/i.test(a.model))) || attemptIsGroqOSS;
           let attemptModel = a.model;
           if (a.provider === "openai" && (!/^gpt-|^o[134]/i.test(attemptModel))) attemptModel = "gpt-6-astra";
           if (a.provider === "deepseek" && !/^deepseek-/.test(attemptModel)) attemptModel = "deepseek-flash";
@@ -458,9 +475,14 @@ async function handleChat(request: Request): Promise<Response> {
               ? { max_completion_tokens: 8192, ...(eff !== "none" ? { reasoning_effort: eff === "xhigh" ? "high" : eff } : {}) }
               : { max_tokens: 8192 }),
           };
+          const headers: Record<string, string> = { Authorization: `Bearer ${a.key}`, "Content-Type": "application/json" };
+          if (a.url.includes("openrouter.ai")) {
+            headers["HTTP-Referer"] = "https://alahsan-ai.lovable.app";
+            headers["X-Title"] = "Al Ahsan AI";
+          }
           res = await fetch(a.url, {
             method: "POST",
-            headers: { Authorization: `Bearer ${a.key}`, "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify(attemptBody),
             signal: ac.signal,
           }).catch((e) => new Response(String(e?.name === "AbortError" ? "timeout" : e), { status: e?.name === "AbortError" ? 504 : 502 }));
@@ -473,14 +495,17 @@ async function handleChat(request: Request): Promise<Response> {
           // must not prevent trying the remaining independent backup providers.
         }
                 // গুগল বা ওপেনএআই-এর সব কী কোটা শেষ (৪২৯) বা অফলাইন হলেও যাতে চ্যাট উত্তর দেওয়া বন্ধ না করে
-        if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"]) {
+        if ((!res.ok || !res.body) && process.env["LOVABLE_API_KEY"] && Date.now() - requestStartedAt < 25000) {
           const first = (model.includes("/") ? model : `${provider}/${model}`).replace(/^google\/gemini-(1|2)\.\d.*$/, "google/gemini-3.1-pro-preview");
-          const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3.8-flash", "google/gemini-3.1-flash-lite"].filter(Boolean))];
+          const chain = [...new Set([provider !== "lovable" ? first : "", "google/gemini-3.8-flash", "google/gemini-3.1-flash-lite"].filter(Boolean))].slice(0, 2);
           for (const gwModel of chain) {
+            const remaining = 25000 - (Date.now() - requestStartedAt);
+            if (remaining <= 0) break;
             const g = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
               method: "POST",
               headers: { Authorization: `Bearer ${process.env["LOVABLE_API_KEY"]}`, "Content-Type": "application/json" },
               body: JSON.stringify({ ...body, model: gwModel }),
+              signal: AbortSignal.timeout(Math.min(5000, remaining)),
             }).catch(() => null);
             if (g?.ok && g.body) { res = g; break; }
             await g?.text().catch(() => "");

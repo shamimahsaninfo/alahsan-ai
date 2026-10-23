@@ -31,6 +31,8 @@ type Ctx = {
 
 const FOUNDER = "alahsanfoundation.info@gmail.com";
 const GOOGLE_CHAT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const GROQ_CHAT = "https://api.groq.com/openai/v1/chat/completions";
+const OPENROUTER_CHAT = "https://openrouter.ai/api/v1/chat/completions";
 const OPENAI_CHAT = "https://api.openai.com/v1/chat/completions";
 const DEEPSEEK_CHAT = "https://api.deepseek.com/chat/completions";
 const WORKING_GOOGLE_MODELS = ["gemini-3.8-flash", "gemini-3.1-flash-lite"];
@@ -50,11 +52,16 @@ async function safeChatCall(url: string, key: string, model: string, content: un
     body["max_tokens"] = 50;
   }
 
+  const headers: Record<string, string> = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+  if (url.includes("openrouter.ai")) {
+    headers["HTTP-Referer"] = "https://alahsan-ai.lovable.app";
+    headers["X-Title"] = "Al Ahsan AI";
+  }
   const r = await fetch(url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(12000),
   }).catch((e) => new Response(String(e), { status: 599 }));
 
   const text = await r.text();
@@ -147,7 +154,14 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
       });
     }
 
-    if (provider === "deepseek" && !rawPool.some((p: any) => p?.provider === "deepseek" && p?.key?.trim()) && !process.env["DEEPSEEK_API_KEY"]) {
+    if (provider === "groq" && !rawPool.some((p: any) => p?.provider === "groq" && p?.active !== false && p?.key?.trim())) {
+      c.issues.push({ id: "settings:no_groq_key", area: "Groq", title: "Groq প্রোভাইডার নির্বাচিত কিন্তু সক্রিয় সংরক্ষিত কী নেই", detail: "সক্রিয় Groq key pool entry পাওয়া যায়নি", severity: "critical", root_cause: "Groq primary হিসেবে নির্বাচিত, কিন্তু সক্রিয় সংরক্ষিত Groq API key অনুপস্থিত।", agent_solution: "অ্যাডমিন প্যানেলে Groq API key যোগ করে সংরক্ষণ করুন।" });
+    }
+    if (provider === "openrouter" && !rawPool.some((p: any) => p?.provider === "openrouter" && p?.active !== false && p?.key?.trim())) {
+      c.issues.push({ id: "settings:no_openrouter_key", area: "OpenRouter", title: "OpenRouter প্রোভাইডার নির্বাচিত কিন্তু সক্রিয় সংরক্ষিত কী নেই", detail: "সক্রিয় OpenRouter key pool entry পাওয়া যায়নি", severity: "critical", root_cause: "OpenRouter primary হিসেবে নির্বাচিত, কিন্তু সক্রিয় সংরক্ষিত API key অনুপস্থিত।", agent_solution: "অ্যাডমিন প্যানেলে OpenRouter API key যোগ করে সংরক্ষণ করুন।" });
+    }
+
+    if (provider === "deepseek" && !rawPool.some((p: any) => p?.provider === "deepseek" && p?.active !== false && p?.key?.trim())) {
       c.issues.push({
         id: "settings:no_deepseek_key",
         area: "DeepSeek এপিআই",
@@ -165,7 +179,8 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
   },
 
   async googleProvider(c) {
-    const key = c.keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
+    const rawPool = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
+    const key = c.keys?.google_key?.trim() || rawPool.find((p: any) => p?.provider === "google" && p?.active !== false)?.key?.trim();
     if (!key) {
       if (c.settings?.provider === "google") {
         c.issues.push({
@@ -203,7 +218,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
 
   async openaiProvider(c) {
     const rawPool = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
-    const key = c.keys?.openai_key?.trim() || rawPool.find((p: any) => p?.provider === "openai")?.key?.trim() || process.env["OPENAI_API_KEY"];
+    const key = c.keys?.openai_key?.trim() || rawPool.find((p: any) => p?.provider === "openai" && p?.active !== false)?.key?.trim();
     if (!key) {
       if (c.settings?.provider === "openai") {
         c.issues.push({
@@ -246,7 +261,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
 
   async deepseekProvider(c) {
     const rawPool = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
-    const key = rawPool.find((p: any) => p?.provider === "deepseek")?.key?.trim() || process.env["DEEPSEEK_API_KEY"];
+    const key = rawPool.find((p: any) => p?.provider === "deepseek" && p?.active !== false)?.key?.trim();
     if (!key) {
       if (c.settings?.provider === "deepseek") {
         c.issues.push({
@@ -280,6 +295,80 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
       agent_solution: err.type === "quota" ? "DeepSeek API-তে 402/ব্যালেন্স বা কোটা সমস্যা। DeepSeek provider dashboard-এ balance/billing ঠিক না হওয়া পর্যন্ত এটিকে primary করে উত্তর পাওয়া যাবে না; অন্য provider নির্বাচন করতে পারেন।" : err.type === "auth" ? "DeepSeek API key ভুল/অকার্যকর হতে পারে; key যাচাই করুন।" : "DeepSeek-এর উত্তর ও API status দেখে provider setting যাচাই করুন।",
       fix: "fix_deepseek",
       fixLabel: "DeepSeek মেরামত করুন",
+    });
+  },
+
+  async groqProvider(c) {
+    const rawPool = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
+    const key = rawPool.find((p: any) => p?.provider === "groq" && p?.active !== false)?.key?.trim();
+    if (!key) {
+      if (c.settings?.provider === "groq") {
+        c.issues.push({
+          id: "groq:nokey",
+          area: "Groq",
+          title: "Groq API Key সেট করা নেই",
+          detail: "Groq কী অনুপস্থিত",
+          severity: "critical",
+          root_cause: "Groq প্রোভাইডার নির্বাচিত হলেও কোনো Groq API Key দেওয়া নেই।",
+          agent_solution: "Groq Console (console.groq.com) থেকে ফ্রি API Key এনে অ্যাডমিন প্যানেলে দিন।",
+        });
+      }
+      return;
+    }
+
+    const testModel = "llama-3.3-70b-versatile";
+    const res = await safeChatCall(GROQ_CHAT, key, testModel, "Test ok");
+    if (res.ok) {
+      c.passed.push("Groq API (llama-3.3-70b-versatile সচল ও অতি দ্রুত সাড়া দিচ্ছে)");
+      return;
+    }
+
+    const err = classifyError(res.status, res.text);
+    c.issues.push({
+      id: "groq:failing",
+      area: "Groq",
+      title: `Groq API কাজ করছে না — ${err.label}`,
+      detail: `[HTTP ${res.status}]: ${res.text.slice(0, 200)}`,
+      severity: "critical",
+      root_cause: `Groq এপিআই রেসপন্স: ${res.text}`,
+      agent_solution: "Groq API Key বা মডেলের রেট লিমিট যাচাই করুন।",
+    });
+  },
+
+  async openrouterProvider(c) {
+    const rawPool = Array.isArray(c.keys?.key_pool) ? c.keys.key_pool : [];
+    const key = rawPool.find((p: any) => p?.provider === "openrouter" && p?.active !== false)?.key?.trim();
+    if (!key) {
+      if (c.settings?.provider === "openrouter") {
+        c.issues.push({
+          id: "openrouter:nokey",
+          area: "OpenRouter",
+          title: "OpenRouter API Key সেট করা নেই",
+          detail: "OpenRouter কী অনুপস্থিত",
+          severity: "critical",
+          root_cause: "OpenRouter প্রোভাইডার নির্বাচিত হলেও কোনো কী দেওয়া নেই।",
+          agent_solution: "OpenRouter (openrouter.ai) থেকে API Key এনে অ্যাডমিন প্যানেলে দিন।",
+        });
+      }
+      return;
+    }
+
+    const testModel = "openrouter/free";
+    const res = await safeChatCall(OPENROUTER_CHAT, key, testModel, "Test ok");
+    if (res.ok) {
+      c.passed.push("OpenRouter API (openrouter/free সক্রিয় ও সচল)");
+      return;
+    }
+
+    const err = classifyError(res.status, res.text);
+    c.issues.push({
+      id: "openrouter:failing",
+      area: "OpenRouter",
+      title: `OpenRouter API কাজ করছে না — ${err.label}`,
+      detail: `[HTTP ${res.status}]: ${res.text.slice(0, 200)}`,
+      severity: "critical",
+      root_cause: `OpenRouter এপিআই রেসপন্স: ${res.text}`,
+      agent_solution: "OpenRouter API Key বা ক্রেডিট/ফ্রি টিয়ার স্ট্যাটাস যাচাই করুন।",
     });
   },
 
@@ -323,7 +412,13 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
         let url = GOOGLE_CHAT;
         let model = p?.model?.trim() || "gemini-3.8-flash";
 
-        if (p.provider === "openai") {
+        if (p.provider === "groq") {
+          url = GROQ_CHAT;
+          model = p?.model?.trim() || "llama-3.3-70b-versatile";
+        } else if (p.provider === "openrouter") {
+          url = OPENROUTER_CHAT;
+          model = p?.model?.trim() || "openrouter/free";
+        } else if (p.provider === "openai") {
           url = OPENAI_CHAT;
           model = p?.model?.trim() || "gpt-6-astra";
         } else if (p.provider === "deepseek") {
@@ -370,7 +465,7 @@ const PROBES: Record<string, (c: Ctx) => Promise<void>> = {
   },
 
   async vision(c) {
-    const key = c.keys?.google_key?.trim() || process.env["GOOGLE_API_KEY"];
+    const key = c.keys?.google_key?.trim();
     if (!key) return;
     const r = await safeChatCall(GOOGLE_CHAT, key, "gemini-3.8-flash", [
       { type: "text", text: "What color? one word" },
