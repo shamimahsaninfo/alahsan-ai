@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { convertToModelMessages, streamText, type UIMessage } from "ai";
+import { convertToModelMessages, streamText, type LanguageModel, type UIMessage } from "ai";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import {
@@ -7,8 +7,8 @@ import {
   getLovableAiGatewayRunId,
   withLovableAiGatewayRunIdHeader,
 } from "./run-id.server";
+import { DEFAULT_MODEL_VALUE, findModel, type ModelOption } from "./models";
 
-const MODEL = "openai/gpt-6-astra";
 const MAX_HISTORY = 30;
 const MAX_TEXT = 8000;
 const RATE_PER_MINUTE = 15;
@@ -27,6 +27,45 @@ function json(status: number, error: string) {
 
 function textOf(m: UIMessage) {
   return m.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+}
+
+/**
+ * Builds the language model for the chosen option.
+ * Lovable AI uses the Responses API through the Lovable gateway (unchanged behaviour).
+ * Groq and Gemini are called through their OpenAI-compatible Chat Completions endpoints,
+ * with API keys read from server-side secrets only.
+ */
+function buildModel(
+  option: ModelOption,
+  runIdFetch: ReturnType<typeof createLovableAiGatewayRunIdFetch> | undefined,
+): { model: LanguageModel } | { error: string } {
+  if (option.provider === "lovable") {
+    const apiKey = process.env["LOVABLE_API_KEY"];
+    if (!apiKey || !runIdFetch) return { error: "AI পরিষেবা কনফিগার করা নেই।" };
+    const provider = createOpenAI({
+      baseURL: "https://ai.gateway.lovable.dev/v1",
+      apiKey,
+      headers: { "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+      fetch: runIdFetch.fetch,
+    });
+    return { model: provider.responses(option.modelId) };
+  }
+
+  const config =
+    option.provider === "groq"
+      ? {
+          name: "Groq",
+          key: process.env["GROQ_API_KEY"],
+          baseURL: "https://api.groq.com/openai/v1",
+        }
+      : {
+          name: "Gemini",
+          key: process.env["GEMINI_API_KEY"],
+          baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+        };
+  if (!config.key) return { error: `${config.name} এপিআই কি কনফিগার করা নেই। অ্যাডমিনকে জানান।` };
+  const provider = createOpenAI({ baseURL: config.baseURL, apiKey: config.key });
+  return { model: provider.chat(option.modelId) };
 }
 
 export async function handleChat(request: Request) {
@@ -50,7 +89,7 @@ export async function handleChat(request: Request) {
   if (userErr || !userData.user) return json(401, "সেশন শেষ হয়ে গেছে, আবার লগইন করুন।");
   const userId = userData.user.id;
 
-  let body: { messages?: UIMessage[]; threadId?: string };
+  let body: { messages?: UIMessage[]; threadId?: string; model?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -59,6 +98,10 @@ export async function handleChat(request: Request) {
   const { messages, threadId } = body;
   if (!threadId || !Array.isArray(messages) || messages.length === 0)
     return json(400, "অবৈধ অনুরোধ।");
+
+  // Unknown or missing model values fall back to the default instead of failing the chat.
+  const option = findModel(body.model) ?? findModel(DEFAULT_MODEL_VALUE)!;
+
   const last = messages[messages.length - 1];
   if (!last || last.role !== "user") return json(400, "অবৈধ অনুরোধ।");
   const lastText = textOf(last).trim();
@@ -88,60 +131,59 @@ export async function handleChat(request: Request) {
   const title = thread.title === "নতুন চ্যাট" ? lastText.slice(0, 60) : thread.title;
   await db.from("threads").update({ title, updated_at: new Date().toISOString() }).eq("id", threadId);
 
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) return json(500, "AI পরিষেবা কনফিগার করা নেই।");
-  const runIdFetch = createLovableAiGatewayRunIdFetch(getLovableAiGatewayRunId(request));
-  const provider = createOpenAI({
-    baseURL: "https://ai.gateway.lovable.dev/v1",
-    apiKey,
-    headers: { "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-    fetch: runIdFetch.fetch,
-  });
+  const runIdFetch =
+    option.provider === "lovable"
+      ? createLovableAiGatewayRunIdFetch(getLovableAiGatewayRunId(request))
+      : undefined;
+  const built = buildModel(option, runIdFetch);
+  if ("error" in built) return json(500, built.error);
 
   const history = messages.slice(-MAX_HISTORY);
   const result = streamText({
-    model: provider.responses(MODEL),
+    model: built.model,
     instructions: INSTRUCTIONS,
     messages: await convertToModelMessages(history),
     abortSignal: request.signal,
-    providerOptions: {
-      openai: {
-        store: false,
-        forceReasoning: true,
-        reasoningEffort: "low",
-        reasoningSummary: "auto",
-        include: ["reasoning.encrypted_content"],
-      },
-    },
+    ...(option.provider === "lovable"
+      ? {
+          providerOptions: {
+            openai: {
+              store: false,
+              forceReasoning: true,
+              reasoningEffort: "low",
+              reasoningSummary: "auto",
+              include: ["reasoning.encrypted_content"],
+            },
+          },
+        }
+      : {}),
   });
 
-  return withLovableAiGatewayRunIdHeader(
-    result.toUIMessageStreamResponse({
-      originalMessages: messages,
-      sendReasoning: true,
-      onError: (err) => {
-        const status = (err as { statusCode?: number })?.statusCode;
-        if (status === 429) return "AI পরিষেবা ব্যস্ত, একটু পরে আবার চেষ্টা করুন।";
-        if (status === 402) return "AI ক্রেডিট শেষ হয়ে গেছে। অ্যাডমিনকে জানান।";
-        if (status === 403) return "এই অনুরোধটি AI পরিষেবা গ্রহণ করেনি।";
-        console.error("AI error", err);
-        return "AI থেকে উত্তর আনতে সমস্যা হয়েছে। আবার চেষ্টা করুন।";
-      },
-      onFinish: async ({ responseMessage, isAborted }) => {
-        if (!responseMessage.parts.length) return;
-        const { error } = await db.from("messages").upsert(
-          {
-            thread_id: threadId,
-            user_id: userId,
-            ui_id: responseMessage.id,
-            role: "assistant",
-            parts: responseMessage.parts as never,
-          },
-          { onConflict: "thread_id,ui_id" },
-        );
-        if (error) console.error("save assistant message failed", error.message, { isAborted });
-      },
-    }),
-    runIdFetch,
-  );
+  const response = result.toUIMessageStreamResponse({
+    originalMessages: messages,
+    sendReasoning: true,
+    onError: (err) => {
+      const status = (err as { statusCode?: number })?.statusCode;
+      if (status === 429) return "AI পরিষেবা ব্যস্ত, একটু পরে আবার চেষ্টা করুন।";
+      if (status === 402) return "AI ক্রেডিট শেষ হয়ে গেছে। অ্যাডমিনকে জানান।";
+      if (status === 403) return "এই অনুরোধটি AI পরিষেবা গ্রহণ করেনি।";
+      console.error("AI error", err);
+      return "AI থেকে উত্তর আনতে সমস্যা হয়েছে। আবার চেষ্টা করুন।";
+    },
+    onFinish: async ({ responseMessage, isAborted }) => {
+      if (!responseMessage.parts.length) return;
+      const { error } = await db.from("messages").upsert(
+        {
+          thread_id: threadId,
+          user_id: userId,
+          ui_id: responseMessage.id,
+          role: "assistant",
+          parts: responseMessage.parts as never,
+        },
+        { onConflict: "thread_id,ui_id" },
+      );
+      if (error) console.error("save assistant message failed", error.message, { isAborted });
+    },
+  });
+  return runIdFetch ? withLovableAiGatewayRunIdHeader(response, runIdFetch) : response;
 }
