@@ -8,6 +8,7 @@ import {
   withLovableAiGatewayRunIdHeader,
 } from "./run-id.server";
 import { DEFAULT_MODEL_VALUE, findModel, type ModelOption } from "./models";
+import { chooseApiKey } from "./keys";
 
 const MAX_HISTORY = 30;
 const MAX_TEXT = 8000;
@@ -32,12 +33,13 @@ function textOf(m: UIMessage) {
 /**
  * Builds the language model for the chosen option.
  * Lovable AI uses the Responses API through the Lovable gateway (unchanged behaviour).
- * Groq and Gemini are called through their OpenAI-compatible Chat Completions endpoints,
- * with API keys read from server-side secrets only.
+ * Groq and Gemini use their OpenAI-compatible Chat Completions endpoints. The key typed in the
+ * app is used first; a server secret is only a fallback.
  */
 function buildModel(
   option: ModelOption,
   runIdFetch: ReturnType<typeof createLovableAiGatewayRunIdFetch> | undefined,
+  userKey: unknown,
 ): { model: LanguageModel } | { error: string } {
   if (option.provider === "lovable") {
     const apiKey = process.env["LOVABLE_API_KEY"];
@@ -53,18 +55,11 @@ function buildModel(
 
   const config =
     option.provider === "groq"
-      ? {
-          name: "Groq",
-          key: process.env["GROQ_API_KEY"],
-          baseURL: "https://api.groq.com/openai/v1",
-        }
-      : {
-          name: "Gemini",
-          key: process.env["GEMINI_API_KEY"],
-          baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-        };
-  if (!config.key) return { error: `${config.name} এপিআই কি কনফিগার করা নেই। অ্যাডমিনকে জানান।` };
-  const provider = createOpenAI({ baseURL: config.baseURL, apiKey: config.key });
+      ? { name: "Groq", baseURL: "https://api.groq.com/openai/v1" }
+      : { name: "Gemini", baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/" };
+  const apiKey = chooseApiKey(option.provider, userKey, process.env);
+  if (!apiKey) return { error: `${config.name} এপিআই কি নেই। মেনু → API কি থেকে কি বসান।` };
+  const provider = createOpenAI({ baseURL: config.baseURL, apiKey });
   return { model: provider.chat(option.modelId) };
 }
 
@@ -89,7 +84,7 @@ export async function handleChat(request: Request) {
   if (userErr || !userData.user) return json(401, "সেশন শেষ হয়ে গেছে, আবার লগইন করুন।");
   const userId = userData.user.id;
 
-  let body: { messages?: UIMessage[]; threadId?: string; model?: unknown };
+  let body: { messages?: UIMessage[]; threadId?: string; model?: unknown; apiKey?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -101,6 +96,14 @@ export async function handleChat(request: Request) {
 
   // Unknown or missing model values fall back to the default instead of failing the chat.
   const option = findModel(body.model) ?? findModel(DEFAULT_MODEL_VALUE)!;
+
+  // Check the model's configuration before anything is saved, so a missing key never leaves a half-finished turn.
+  const runIdFetch =
+    option.provider === "lovable"
+      ? createLovableAiGatewayRunIdFetch(getLovableAiGatewayRunId(request))
+      : undefined;
+  const built = buildModel(option, runIdFetch, body.apiKey);
+  if ("error" in built) return json(option.provider === "lovable" ? 500 : 400, built.error);
 
   const last = messages[messages.length - 1];
   if (!last || last.role !== "user") return json(400, "অবৈধ অনুরোধ।");
@@ -131,13 +134,6 @@ export async function handleChat(request: Request) {
   const title = thread.title === "নতুন চ্যাট" ? lastText.slice(0, 60) : thread.title;
   await db.from("threads").update({ title, updated_at: new Date().toISOString() }).eq("id", threadId);
 
-  const runIdFetch =
-    option.provider === "lovable"
-      ? createLovableAiGatewayRunIdFetch(getLovableAiGatewayRunId(request))
-      : undefined;
-  const built = buildModel(option, runIdFetch);
-  if ("error" in built) return json(500, built.error);
-
   const history = messages.slice(-MAX_HISTORY);
   const result = streamText({
     model: built.model,
@@ -167,7 +163,10 @@ export async function handleChat(request: Request) {
       if (status === 429) return "AI পরিষেবা ব্যস্ত, একটু পরে আবার চেষ্টা করুন।";
       if (status === 402) return "AI ক্রেডিট শেষ হয়ে গেছে। অ্যাডমিনকে জানান।";
       if (status === 403) return "এই অনুরোধটি AI পরিষেবা গ্রহণ করেনি।";
-      console.error("AI error", err);
+      if (status === 401 && option.provider !== "lovable")
+        return "এপিআই কি সঠিক নয় বা মেয়াদ শেষ। মেনু → API কি থেকে কি আবার বসান।";
+      // Log only the provider and status, never the request, so a user's key cannot end up in the logs.
+      console.error("AI error", option.provider, status ?? "no-status");
       return "AI থেকে উত্তর আনতে সমস্যা হয়েছে। আবার চেষ্টা করুন।";
     },
     onFinish: async ({ responseMessage, isAborted }) => {
