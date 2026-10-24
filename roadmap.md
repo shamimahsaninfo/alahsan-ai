@@ -1,4 +1,7 @@
 # Al Ahsan AI roadmap
-- [x] ZIP (alahsanbd-main) code copied in: chat, admin panel (API keys/models/limits), voice call, live camera, profile, password reset, salat, health check; old chats moved over
-- [ ] Real phone voice/lock-screen check — needs owner after publish
-- [ ] Password-reset email delivery — needs owner's inbox check
+
+- [x] Phase 1: login (email + Google), streaming Bengali/English AI chat, saved threads (new/rename/delete/search), light/dark
+- [x] Use uploaded Al-Ahsan Foundation logo as app logo + favicon
+- [ ] Phase 2: image upload/vision, file uploads (PDF/TXT/DOCX/CSV)
+- [ ] Phase 3: voice (speech-to-text, text-to-speech, live voice)
+- [ ] Phase 4: memory on/off, admin panel with usage stats, rate limits

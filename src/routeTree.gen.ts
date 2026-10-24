@@ -10,30 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SlugRouteImport } from './routes/$slug'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
-import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
-import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
-import { Route as AuthenticatedSalatRouteImport } from './routes/_authenticated/salat'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
-import { Route as ApiMemoryRouteImport } from './routes/api/memory'
-import { Route as ApiPagesRouteImport } from './routes/api/pages'
-import { Route as ApiProviderSignalRouteImport } from './routes/api/provider-signal'
-import { Route as ApiSettingsRouteImport } from './routes/api/settings'
-import { Route as ImgSplatRouteImport } from './routes/img.$'
-import { Route as PIdRouteImport } from './routes/p/$id'
+import { Route as AuthenticatedChatIndexRouteImport } from './routes/_authenticated/chat.index'
+import { Route as AuthenticatedChatThreadIdRouteImport } from './routes/_authenticated/chat.$threadId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SlugRoute = SlugRouteImport.update({
-  id: '/$slug',
-  path: '/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -45,188 +30,66 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedSalatRoute = AuthenticatedSalatRouteImport.update({
-  id: '/salat',
-  path: '/salat',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiMemoryRoute = ApiMemoryRouteImport.update({
-  id: '/api/memory',
-  path: '/api/memory',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedChatIndexRoute = AuthenticatedChatIndexRouteImport.update({
+  id: '/chat/',
+  path: '/chat/',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ApiPagesRoute = ApiPagesRouteImport.update({
-  id: '/api/pages',
-  path: '/api/pages',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiProviderSignalRoute = ApiProviderSignalRouteImport.update({
-  id: '/api/provider-signal',
-  path: '/api/provider-signal',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiSettingsRoute = ApiSettingsRouteImport.update({
-  id: '/api/settings',
-  path: '/api/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImgSplatRoute = ImgSplatRouteImport.update({
-  id: '/img/$',
-  path: '/img/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PIdRoute = PIdRouteImport.update({
-  id: '/p/$id',
-  path: '/p/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const AuthenticatedChatThreadIdRoute =
+  AuthenticatedChatThreadIdRouteImport.update({
+    id: '/chat/$threadId',
+    path: '/chat/$threadId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/$slug': typeof SlugRoute
   '/auth': typeof AuthRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/admin': typeof AuthenticatedAdminRoute
-  '/chat': typeof AuthenticatedChatRoute
-  '/profile': typeof AuthenticatedProfileRoute
-  '/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/memory': typeof ApiMemoryRoute
-  '/api/pages': typeof ApiPagesRoute
-  '/api/provider-signal': typeof ApiProviderSignalRoute
-  '/api/settings': typeof ApiSettingsRoute
-  '/img/$': typeof ImgSplatRoute
-  '/p/$id': typeof PIdRoute
+  '/chat/$threadId': typeof AuthenticatedChatThreadIdRoute
+  '/chat/': typeof AuthenticatedChatIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/$slug': typeof SlugRoute
   '/auth': typeof AuthRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/admin': typeof AuthenticatedAdminRoute
-  '/chat': typeof AuthenticatedChatRoute
-  '/profile': typeof AuthenticatedProfileRoute
-  '/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/memory': typeof ApiMemoryRoute
-  '/api/pages': typeof ApiPagesRoute
-  '/api/provider-signal': typeof ApiProviderSignalRoute
-  '/api/settings': typeof ApiSettingsRoute
-  '/img/$': typeof ImgSplatRoute
-  '/p/$id': typeof PIdRoute
+  '/chat/$threadId': typeof AuthenticatedChatThreadIdRoute
+  '/chat': typeof AuthenticatedChatIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/$slug': typeof SlugRoute
   '/auth': typeof AuthRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/_authenticated/admin': typeof AuthenticatedAdminRoute
-  '/_authenticated/chat': typeof AuthenticatedChatRoute
-  '/_authenticated/profile': typeof AuthenticatedProfileRoute
-  '/_authenticated/salat': typeof AuthenticatedSalatRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/memory': typeof ApiMemoryRoute
-  '/api/pages': typeof ApiPagesRoute
-  '/api/provider-signal': typeof ApiProviderSignalRoute
-  '/api/settings': typeof ApiSettingsRoute
-  '/img/$': typeof ImgSplatRoute
-  '/p/$id': typeof PIdRoute
+  '/_authenticated/chat/$threadId': typeof AuthenticatedChatThreadIdRoute
+  '/_authenticated/chat/': typeof AuthenticatedChatIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/$slug'
-    | '/auth'
-    | '/reset-password'
-    | '/admin'
-    | '/chat'
-    | '/profile'
-    | '/salat'
-    | '/api/chat'
-    | '/api/memory'
-    | '/api/pages'
-    | '/api/provider-signal'
-    | '/api/settings'
-    | '/img/$'
-    | '/p/$id'
+  fullPaths: '/' | '/auth' | '/api/chat' | '/chat/$threadId' | '/chat/'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/$slug'
-    | '/auth'
-    | '/reset-password'
-    | '/admin'
-    | '/chat'
-    | '/profile'
-    | '/salat'
-    | '/api/chat'
-    | '/api/memory'
-    | '/api/pages'
-    | '/api/provider-signal'
-    | '/api/settings'
-    | '/img/$'
-    | '/p/$id'
+  to: '/' | '/auth' | '/api/chat' | '/chat/$threadId' | '/chat'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
-    | '/$slug'
     | '/auth'
-    | '/reset-password'
-    | '/_authenticated/admin'
-    | '/_authenticated/chat'
-    | '/_authenticated/profile'
-    | '/_authenticated/salat'
     | '/api/chat'
-    | '/api/memory'
-    | '/api/pages'
-    | '/api/provider-signal'
-    | '/api/settings'
-    | '/img/$'
-    | '/p/$id'
+    | '/_authenticated/chat/$threadId'
+    | '/_authenticated/chat/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  SlugRoute: typeof SlugRoute
   AuthRoute: typeof AuthRoute
-  ResetPasswordRoute: typeof ResetPasswordRoute
   ApiChatRoute: typeof ApiChatRoute
-  ApiMemoryRoute: typeof ApiMemoryRoute
-  ApiPagesRoute: typeof ApiPagesRoute
-  ApiProviderSignalRoute: typeof ApiProviderSignalRoute
-  ApiSettingsRoute: typeof ApiSettingsRoute
-  ImgSplatRoute: typeof ImgSplatRoute
-  PIdRoute: typeof PIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -236,13 +99,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/$slug': {
-      id: '/$slug'
-      path: '/$slug'
-      fullPath: '/$slug'
-      preLoaderRoute: typeof SlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -259,41 +115,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/admin': {
-      id: '/_authenticated/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthenticatedAdminRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/chat': {
-      id: '/_authenticated/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof AuthenticatedChatRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/profile': {
-      id: '/_authenticated/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof AuthenticatedProfileRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/salat': {
-      id: '/_authenticated/salat'
-      path: '/salat'
-      fullPath: '/salat'
-      preLoaderRoute: typeof AuthenticatedSalatRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
@@ -301,63 +122,31 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/memory': {
-      id: '/api/memory'
-      path: '/api/memory'
-      fullPath: '/api/memory'
-      preLoaderRoute: typeof ApiMemoryRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/chat/': {
+      id: '/_authenticated/chat/'
+      path: '/chat'
+      fullPath: '/chat/'
+      preLoaderRoute: typeof AuthenticatedChatIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/pages': {
-      id: '/api/pages'
-      path: '/api/pages'
-      fullPath: '/api/pages'
-      preLoaderRoute: typeof ApiPagesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/provider-signal': {
-      id: '/api/provider-signal'
-      path: '/api/provider-signal'
-      fullPath: '/api/provider-signal'
-      preLoaderRoute: typeof ApiProviderSignalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/settings': {
-      id: '/api/settings'
-      path: '/api/settings'
-      fullPath: '/api/settings'
-      preLoaderRoute: typeof ApiSettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/img/$': {
-      id: '/img/$'
-      path: '/img/$'
-      fullPath: '/img/$'
-      preLoaderRoute: typeof ImgSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/p/$id': {
-      id: '/p/$id'
-      path: '/p/$id'
-      fullPath: '/p/$id'
-      preLoaderRoute: typeof PIdRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/chat/$threadId': {
+      id: '/_authenticated/chat/$threadId'
+      path: '/chat/$threadId'
+      fullPath: '/chat/$threadId'
+      preLoaderRoute: typeof AuthenticatedChatThreadIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
-  AuthenticatedChatRoute: typeof AuthenticatedChatRoute
-  AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
-  AuthenticatedSalatRoute: typeof AuthenticatedSalatRoute
+  AuthenticatedChatThreadIdRoute: typeof AuthenticatedChatThreadIdRoute
+  AuthenticatedChatIndexRoute: typeof AuthenticatedChatIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
-  AuthenticatedChatRoute: AuthenticatedChatRoute,
-  AuthenticatedProfileRoute: AuthenticatedProfileRoute,
-  AuthenticatedSalatRoute: AuthenticatedSalatRoute,
+  AuthenticatedChatThreadIdRoute: AuthenticatedChatThreadIdRoute,
+  AuthenticatedChatIndexRoute: AuthenticatedChatIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -366,16 +155,8 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  SlugRoute: SlugRoute,
   AuthRoute: AuthRoute,
-  ResetPasswordRoute: ResetPasswordRoute,
   ApiChatRoute: ApiChatRoute,
-  ApiMemoryRoute: ApiMemoryRoute,
-  ApiPagesRoute: ApiPagesRoute,
-  ApiProviderSignalRoute: ApiProviderSignalRoute,
-  ApiSettingsRoute: ApiSettingsRoute,
-  ImgSplatRoute: ImgSplatRoute,
-  PIdRoute: PIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
