@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ChatWindow } from "@/components/chat/ChatWindow";
+import { AiSettings } from "@/components/chat/AiSettings";
 import { useTheme } from "@/components/theme";
 import logo from "@/assets/logo.png";
 
@@ -136,6 +137,9 @@ function ChatPage() {
             <p className="px-3 py-2 text-sm text-muted-foreground">কোনো চ্যাট পাওয়া যায়নি</p>
           )}
         </nav>
+        <div className="border-t pt-3">
+          <AiSettings />
+        </div>
         <div className="flex items-center gap-1 border-t p-3 text-sm">
           <span className="flex-1 truncate text-muted-foreground">{user.email}</span>
           <Button variant="ghost" size="icon" onClick={toggle} aria-label="থিম পরিবর্তন">
