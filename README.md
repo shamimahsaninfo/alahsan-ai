@@ -1,230 +1,14 @@
-# Polyglot Insight Bot
-
-AL AHSAN AI — Advanced AI Upgrade
-
-
-
-আমার বর্তমান প্রজেক্ট https://al-ahsan-ai-web-buil-azr3.bolt.host হলো Al Ahsan AI। এটিকে একটি শক্তিশালী, নিরাপদ, বহুভাষিক এবং multimodal AI assistant-এ উন্নত করো।
-
-
-
-1. প্রথমে বর্তমান প্রজেক্ট পরীক্ষা
-
-
-
-- বর্তমান কোড, ফ্রেমওয়ার্ক, API, ডেটাবেস এবং ফিচার পরীক্ষা করো।
-
-- আগে কাজ করা ফিচার, ডিজাইন, লোগো ও ডেটা অক্ষত রাখো।
-
-- কোনো বড় পরিবর্তনের আগে উপযুক্ত ব্যাকআপ বা Git checkpoint তৈরি করো।
-
-- একবারে পুরো প্রজেক্ট পুনর্নির্মাণ না করে ধাপে ধাপে উন্নয়ন করো।
-
-
-
-2. বাস্তব AI ইঞ্জিন
-
-
-
-- একটি বাস্তব, সমর্থিত AI API নিরাপদ ব্যাকএন্ডের মাধ্যমে সংযুক্ত করো।
-
-- বাংলা, ইংরেজি এবং অন্যান্য সমর্থিত ভাষায় প্রশ্নের উত্তর দেবে।
-
-- যুক্তি, পড়াশোনা, গণিত, বিজ্ঞান, অনুবাদ, লেখালেখি, প্রোগ্রামিং ও সমস্যা সমাধান সমর্থন করবে।
-
-- কথোপকথনের প্রাসঙ্গিক ইতিহাস মডেলে পাঠাবে।
-
-- API ব্যর্থ হলে ব্যবহারকারীকে স্পষ্ট বার্তা দেখাবে।
-
-- কোনো API ছাড়া AI চালু আছে বলে ভান করবে না।
-
-- API key শুধু server-side secrets-এ রাখবে।
-
-
-
-3. ছবি ও ভিশন
-
-
-
-- ছবি আপলোড এবং ছবি বিশ্লেষণের সুবিধা।
-
-- ছবির লেখা OCR-এর মাধ্যমে পড়া।
-
-- প্রশ্নের ছবি থেকে ধাপে ধাপে সমাধান।
-
-- চার্ট, ডায়াগ্রাম, স্ক্রিনশট ও সাধারণ ছবির ব্যাখ্যা।
-
-- নতুন ছবি তৈরি করার সুবিধা শুধু সমর্থিত image-generation API সংযুক্ত থাকলে চালু করবে।
-
-
-
-4. ফাইল ও ডকুমেন্ট
-
-
-
-- PDF, TXT, DOCX, CSV এবং সমর্থিত অন্যান্য ফাইল আপলোড।
-
-- ফাইলের সারাংশ, প্রশ্নোত্তর, অনুবাদ ও তথ্য অনুসন্ধান।
-
-- বড় ফাইল নিরাপদভাবে প্রক্রিয়াকরণ।
-
-- ফাইলের ধরন, আকার ও নিরাপত্তা যাচাই।
-
-- ব্যবহারকারীর অনুমতি ছাড়া ব্যক্তিগত ফাইল অন্য কাউকে দেখানো যাবে না।
-
-
-
-5. কোডিং ও উন্নত বিশ্লেষণ
-
-
-
-- Python, JavaScript, HTML, CSS এবং অন্যান্য ভাষায় কোড লেখা ও ব্যাখ্যা।
-
-- কোড সংশোধন, debugging ও error analysis।
-
-- প্রয়োজন হলে নিরাপদ sandbox-এ কোড চালানো।
-
-- অনুমোদন ছাড়া সার্ভারে arbitrary code চালানো যাবে না।
-
-- ডেটা বিশ্লেষণ ও চার্ট তৈরি শুধু কার্যকর টুল সংযুক্ত থাকলে চালু করবে।
-
-
-
-6. ভয়েস AI
-
-
-
-- মাইক্রোফোন দিয়ে বাংলা ও সমর্থিত ভাষায় কথা বলে প্রশ্ন করার সুবিধা।
-
-- Speech-to-text এবং text-to-speech।
-
-- AI-এর উত্তর শোনার জন্য Play, Pause ও Stop নিয়ন্ত্রণ।
-
-- লাইভ voice conversation-এর জন্য উপযুক্ত realtime API থাকলে সেটি সংযুক্ত করো।
-
-- মাইক্রোফোনের অনুমতি, ব্যর্থতা ও সংযোগের অবস্থা পরিষ্কারভাবে দেখাও।
-
-
-
-7. চ্যাট ও স্মৃতি
-
-
-
-- New Chat, Chat History, Rename, Delete এবং Search।
-
-- প্রয়োজনীয় কথোপকথন ডেটাবেসে সংরক্ষণ।
-
-- লগইন করা ব্যবহারকারীর তথ্য আলাদা রাখা।
-
-- Memory চালু/বন্ধ এবং সংরক্ষিত স্মৃতি মুছে ফেলার ব্যবস্থা।
-
-- ব্যবহারকারী না চাইলে ব্যক্তিগত তথ্য স্থায়ী স্মৃতিতে সংরক্ষণ করবে না।
-
-
-
-8. আধুনিক ব্যবহারকারী ইন্টারফেস
-
-
-
-- সুন্দর, দ্রুত, মোবাইল-ফ্রেন্ডলি ডিজাইন।
-
-- বাংলা ইন্টারফেস ও সঠিক বাংলা ফন্ট।
-
-- Markdown, code blocks, syntax highlighting এবং copy button।
-
-- ফাইল সংযুক্তি, image upload, microphone ও send button।
-
-- Loading indicator, streaming response এবং বন্ধ করার সুবিধা।
-
-- Light/Dark mode ও অ্যাক্সেসিবিলিটি।
-
-
-
-9. অ্যাডমিন ও নিরাপত্তা
-
-
-
-- অনুমোদিত অ্যাডমিনের জন্য নিরাপদ প্রশাসনিক প্যানেল।
-
-- API usage, errors এবং প্রয়োজনীয় usage statistics দেখা।
-
-- Authentication, role-based authorization, rate limiting ও input validation।
-
-- ব্যক্তিগত API key, পাসওয়ার্ড বা গোপন তথ্য লগে প্রকাশ করবে না।
-
-- শুধু UI-তে Admin বোতাম দেখিয়ে কাউকে অ্যাডমিন বানাবে না।
-
-- ব্যক্তিগত ডেটাবেস রেকর্ডে যথাযথ access control রাখবে।
-
-
-
-10. খরচ ও সীমা
-
-
-
-- API ব্যবহারের পরিমাণ, ব্যর্থতা ও সম্ভাব্য খরচ পর্যবেক্ষণের ব্যবস্থা।
-
-- ফাইলের আকার, request limit, timeout এবং rate limit নির্ধারণ।
-
-- ব্যয়বহুল ফিচার ব্যবহারের আগে প্রয়োজনীয় সতর্কতা দেখাও।
-
-- অনুমোদিত API ও বাজেটের সীমা অতিক্রম না করার ব্যবস্থা রাখো।
-
-
-
-11. পরীক্ষা ও প্রকাশ
-
-
-
-প্রতিটি ফিচার বাস্তবে পরীক্ষা করো:
-
-
-
-- AI API সংযোগ কাজ করছে কি না।
-
-- বাংলা প্রশ্নের উত্তর পাওয়া যায় কি না।
-
-- ছবি ও ফাইল সঠিকভাবে প্রক্রিয়াকরণ হচ্ছে কি না।
-
-- ভয়েস রেকর্ডিং ও অডিও উত্তর কাজ করছে কি না।
-
-- চ্যাট ইতিহাস ও স্মৃতি সঠিকভাবে সংরক্ষিত হচ্ছে কি না।
-
-- অন্য ব্যবহারকারী অননুমোদিত ডেটা দেখতে পারে কি না।
-
-- মোবাইল ও ডেস্কটপে কোনো গুরুত্বপূর্ণ error হচ্ছে কি না।
-
-
-
-কাজ শেষে আমাকে বাংলায় জানাবে:
-
-
-
-1. কোন ফিচার সম্পূর্ণ চালু হয়েছে।
-
-2. কোন ফিচারের জন্য API key বা paid service লাগবে।
-
-3. কোন ফিচার এখনো অসম্পূর্ণ।
-
-4. কীভাবে প্রতিটি ফিচার পরীক্ষা করব।
-
-5. কীভাবে নিরাপদে নতুন সংস্করণ publish করব।
-
-
-
-সবচেয়ে গুরুত্বপূর্ণ: প্রথমে বর্তমান প্রজেক্ট বিশ্লেষণ করো। তারপর বাস্তবায়ন শুরু করো। মিথ্যা success message দেবে না, API key প্রকাশ করবে না এবং যাচাই না করে কোনো ফিচারকে সম্পূর্ণ কার্যকর বলবে না।
+# Welcome to your Lovable project
 
 This project was built with [Lovable](https://lovable.dev).
 
-**Live app**: https://polyglot-insight-bot.lovable.app
-
 ## Build with Lovable
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/c38001de-538c-437f-9960-833664aa4db0).
+Open your project in the [Lovable editor](https://lovable.dev) and keep building.
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitLab and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
+- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -236,3 +20,10 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Built with
+
+- TanStack Start
+- TypeScript
+- React
+- Tailwind CSS
