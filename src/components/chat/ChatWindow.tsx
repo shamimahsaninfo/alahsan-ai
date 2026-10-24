@@ -7,6 +7,25 @@ import { ArrowUp, Square, Copy, Volume2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import logo from "@/assets/logo.png";
+import { DEFAULT_MODEL_VALUE, MODEL_OPTIONS, findModel } from "@/lib/ai/models";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const MODEL_STORAGE_KEY = "alahsan-ai-model";
+
+function readStoredModel(): string {
+  try {
+    const stored = window.localStorage.getItem(MODEL_STORAGE_KEY);
+    return findModel(stored) ? stored! : DEFAULT_MODEL_VALUE;
+  } catch {
+    return DEFAULT_MODEL_VALUE;
+  }
+}
 
 const SUGGESTIONS = [
   "নিউটনের গতির তিনটি সূত্র সহজভাবে বুঝিয়ে দাও",
@@ -25,15 +44,29 @@ export function ChatWindow({
   onFinished: () => void;
 }) {
   const [input, setInput] = useState("");
+  const [model, setModel] = useState<string>(DEFAULT_MODEL_VALUE);
+  const modelRef = useRef(model);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setModel(readStoredModel());
+  }, []);
+  useEffect(() => {
+    modelRef.current = model;
+    try {
+      window.localStorage.setItem(MODEL_STORAGE_KEY, model);
+    } catch {
+      /* storage unavailable: keep the choice for this session only */
+    }
+  }, [model]);
 
   const { messages, sendMessage, status, stop, error } = useChat({
     id: threadId,
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: "/api/chat",
-      body: { threadId },
+      body: () => ({ threadId, model: modelRef.current }),
       headers: async () => {
         const { data } = await supabase.auth.getSession();
         return { Authorization: `Bearer ${data.session?.access_token ?? ""}` };
@@ -110,6 +143,21 @@ export function ChatWindow({
         }}
         className="mx-auto w-full max-w-3xl px-4 pb-4"
       >
+        <div className="mb-2 flex items-center gap-2">
+          <span className="shrink-0 text-xs text-muted-foreground">মডেল</span>
+          <Select value={model} onValueChange={setModel} disabled={busy}>
+            <SelectTrigger aria-label="AI মডেল বাছুন" className="h-8 w-full max-w-xs text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MODEL_OPTIONS.map((m) => (
+                <SelectItem key={m.value} value={m.value} className="text-xs">
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex items-end gap-2 rounded-2xl border bg-card p-2 shadow-sm focus-within:ring-2 focus-within:ring-ring">
           <textarea
             ref={inputRef}
